@@ -96,11 +96,11 @@ for msg in history.messages:
 # User input
 user_input = st.chat_input("Type your message...")
 if user_input:
-    with st.spinner("Typing..."):
-        response = chain_with_history.invoke(
-            {"input": user_input},
-            config={"configurable": {"session_id": "default"}}
-        )
+    # Directly invoke without spinner
+    response = chain_with_history.invoke(
+        {"input": user_input},
+        config={"configurable": {"session_id": "default"}}
+    )
     # Show user message
     st.markdown(f'''
     <div class="message-container user-container">
