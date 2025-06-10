@@ -7,7 +7,7 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import StreamlitChatMessageHistory
 import streamlit as st
 
-# 样式 (保持不变)
+# 样式保持不变
 st.markdown("""
 <style>
 .message-container { display: flex; align-items: flex-start; margin-bottom: 18px; }
@@ -30,36 +30,28 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# API Key (保持不变)
 os.environ["DASHSCOPE_API_KEY"] = "sk-15292fd22b02419db281e42552c0e453"
-
-# 模型 (保持不变)
 llm = ChatTongyi(model_name="qwen-plus")
 
-# 系统提示 (保持不变)
 try:
     with open('prompt.txt', 'r', encoding='utf-8') as f:
         system_prompt = f.read()
 except FileNotFoundError:
     system_prompt = "You are 'Alex', a study participant texting warmly."
 
-# 唯一用户ID (保持不变)
 if "user_id" not in st.session_state:
     st.session_state.user_id = str(uuid.uuid4())
 user_id = st.session_state.user_id
 
-# 历史工厂：为每个用户单独创建 (保持不变)
 def history_factory(session_id):
     return StreamlitChatMessageHistory(key=f"chat_history_{session_id}")
 
-# 提示模板 (保持不变)
 prompt = ChatPromptTemplate.from_messages([
     ("system", system_prompt),
     MessagesPlaceholder(variable_name="history"),
     ("human", "{input}"),
 ])
 
-# 带历史的链 (保持不变，但现在依赖自动历史)
 chain = prompt | llm
 chain_with_history = RunnableWithMessageHistory(
     chain,
@@ -68,14 +60,24 @@ chain_with_history = RunnableWithMessageHistory(
     history_messages_key="history",
 )
 
-# 标题 (保持不变)
 st.header("AI Chat Interface")
 
-# 获取当前用户的历史记录
 current_history = history_factory(user_id)
 
-# 渲染当前用户的历史记录 (修复：添加消息渲染代码)
-for msg in current_history.messages:
+# 使用会话状态管理待处理消息
+if "pending_messages" not in st.session_state:
+    st.session_state.pending_messages = []
+
+# 渲染历史消息和待处理消息
+def render_all_messages():
+    # 渲染历史消息
+    for msg in current_history.messages:
+        render_message(msg)
+    # 渲染待处理消息
+    for msg in st.session_state.pending_messages:
+        render_message(msg)
+
+def render_message(msg):
     if msg.type == "human":
         st.markdown(f'''
         <div class="message-container user-container">
@@ -95,18 +97,45 @@ for msg in current_history.messages:
         </div>
         ''', unsafe_allow_html=True)
 
-# 用户输入处理 (保持不变)
+# 首次渲染已有消息
+render_all_messages()
+
 user_input = st.chat_input("Type your message...")
 if user_input:
-    try:
-        response = chain_with_history.invoke(
-            {"input": user_input},
-            config={"configurable": {"session_id": user_id}}
-        )
-    except Exception as e:
-        current_history.add_ai_message(f"Error: {str(e)}")
+    # 立即添加用户消息到待处理队列
+    user_msg = current_history.create_message(content=user_input, type="human")
+    st.session_state.pending_messages.append(user_msg)
+    
+    # 立即渲染待处理消息
+    st.experimental_rerun()
 
-# 父窗口通信 (可选，保持不变)
+# 处理待处理消息
+while st.session_state.pending_messages:
+    msg = st.session_state.pending_messages.pop(0)
+    
+    # 正式添加到历史记录
+    current_history.add_message(msg)
+    
+    try:
+        # 显示加载状态
+        with st.spinner("Thinking..."):
+            response = chain_with_history.invoke(
+                {"input": msg.content},
+                config={"configurable": {"session_id": user_id}}
+            )
+            
+            # 添加AI回复到历史记录
+            ai_msg = current_history.create_message(content=response.content, type="ai")
+            current_history.add_message(ai_msg)
+            
+    except Exception as e:
+        error_msg = current_history.create_message(content=f"Error: {str(e)}", type="ai")
+        current_history.add_message(error_msg)
+    
+    # 强制刷新显示最新消息
+    st.experimental_rerun()
+
+# 父窗口通信
 if current_history.messages:
     message = {
         "type": "chat-update",
@@ -120,7 +149,7 @@ if current_history.messages:
     """
     st.markdown(js_code, unsafe_allow_html=True)
 
-# 清除聊天处理程序 (可选，保持不变)
+# 清除聊天处理程序
 st.markdown(f"""
 <script>
     window.addEventListener('message', function(event) {{
@@ -130,4 +159,4 @@ st.markdown(f"""
         }}
     }});
 </script>
-""", unsafe_allow_html=True)    
+""", unsafe_allow_html=True)
