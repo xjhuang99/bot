@@ -7,86 +7,117 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import ChatMessageHistory
 import streamlit as st
 
-# Configure page settings for iframe embedding
+# Configure page settings with robot page icon
 st.set_page_config(
     page_title="Qwen Chat",
-    page_icon="🤖",
-    layout="centered",  # Compact layout suitable for iframe
-    initial_sidebar_state="collapsed"  # Sidebar collapsed by default
+    page_icon="🤖",  # Robot icon for the page
+    layout="centered",
+    initial_sidebar_state="collapsed"
 )
 
-# Hide Streamlit footer and menu for cleaner interface
+# Hide Streamlit footer and menu
 hide_streamlit_style = """
 <style>
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
 
-    /* Custom styles for message alignment and avatars */
+    /* Message container and avatar styles */
     .message-container {
         display: flex;
-        align-items: flex-end;
-        margin-bottom: 15px;
+        align-items: flex-start;
+        margin-bottom: 18px;
     }
     
     .avatar {
-        width: 36px;
-        height: 36px;
+        width: 42px;
+        height: 42px;
         border-radius: 50%;
-        margin: 0 8px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-weight: bold;
-        margin-bottom: 4px;
+        margin: 0 10px;
+        font-size: 16px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     
     .user-avatar {
         background-color: #FFD700; /* Yellow for user */
         order: 2;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 12h-4l-3 9L9 3l-3 9H2'%3E%3C/path%3E%3C/svg%3E");
+        background-size: 20px;
+        background-position: center;
+        background-repeat: no-repeat;
     }
     
     .assistant-avatar {
-        background-color: #90CAF9; /* Light blue for AI */
+        background-color: #4285F4; /* Blue for AI */
         order: 0;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cline x1='12' y1='8' x2='12' y2='12'%3E%3C/line%3E%3Cline x1='12' y1='16' x2='12.01' y2='16'%3E%3C/line%3E%3C/svg%3E");
+        background-size: 20px;
+        background-position: center;
+        background-repeat: no-repeat;
     }
     
     .user-message {
         text-align: right;
-        margin-left: 10px;
-        background-color: #FFFACD; /* Light yellow */
-        padding: 8px 12px;
-        border-radius: 18px 18px 0 18px;
+        background-color: #FFF8E1; /* Light yellow */
+        padding: 10px 14px;
+        border-radius: 20px 20px 0 20px;
         order: 1;
+        min-width: 10px;
+        max-width: 70%;
+        position: relative;
     }
     
     .assistant-message {
         text-align: left;
-        margin-right: 10px;
         background-color: #E3F2FD; /* Light blue */
-        padding: 8px 12px;
-        border-radius: 18px 18px 18px 0;
+        padding: 10px 14px;
+        border-radius: 20px 20px 20px 0;
         order: 1;
+        min-width: 10px;
+        max-width: 70%;
+        position: relative;
     }
     
-    .user-text {
-        order: 2;
+    /* Arrow indicators for message direction */
+    .user-message::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        right: -12px;
+        width: 0;
+        height: 0;
+        border: 12px solid transparent;
+        border-left-color: #FFF8E1;
+        border-top: 0;
+        margin-bottom: -12px;
     }
     
-    .assistant-text {
-        order: 0;
+    .assistant-message::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: -12px;
+        width: 0;
+        height: 0;
+        border: 12px solid transparent;
+        border-right-color: #E3F2FD;
+        border-top: 0;
+        margin-bottom: -12px;
     }
 </style>
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-# Set API key for model authentication
+# Set API key
 os.environ["DASHSCOPE_API_KEY"] = "sk-15292fd22b02419db281e42552c0e453"
 
-# Initialize the chat model
+# Initialize model
 llm = ChatTongyi(model_name="qwen-plus")
 
-# Define prompt template with English instructions (loaded from file)
+# Load prompt
 try:
     with open('prompt.txt', 'r', encoding='utf-8') as f:
         system_prompt = f.read()
@@ -99,14 +130,14 @@ except FileNotFoundError:
     - always validate the other person's feelings
     """
 
-# Construct the prompt with system message and history placeholder
+# Define prompt template
 prompt = ChatPromptTemplate.from_messages([
     ("system", system_prompt),
     MessagesPlaceholder(variable_name="history"),
     ("human", "{input}"),
 ])
 
-# Build the conversation chain with message history
+# Build conversation chain
 chain = prompt | llm
 chain_with_history = RunnableWithMessageHistory(
     chain,
@@ -115,62 +146,58 @@ chain_with_history = RunnableWithMessageHistory(
     history_messages_key="history",
 )
 
-# Set up the English-language interface title
+# Interface title
 st.header("AI Chat Interface")
 
-# Initialize session state for message history
+# Initialize message history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display chat history with avatars and custom alignment
+# Display chat history with avatars
 for msg in st.session_state.messages:
     if msg["role"] == "user":
         st.markdown(f'''
         <div class="message-container">
-            <div class="user-avatar">U</div>
-            <div class="user-text"><div class="user-message">{msg["content"]}</div></div>
+            <div class="user-avatar"></div>
+            <div class="user-message">{msg["content"]}</div>
         </div>
         ''', unsafe_allow_html=True)
-    else:  # assistant
+    else:
         st.markdown(f'''
         <div class="message-container">
-            <div class="assistant-text"><div class="assistant-message">{msg["content"]}</div></div>
-            <div class="assistant-avatar">A</div>
+            <div class="assistant-message">{msg["content"]}</div>
+            <div class="assistant-avatar"></div>
         </div>
         ''', unsafe_allow_html=True)
 
-# Handle user input in English
+# Handle user input
 if user_input := st.chat_input("Type your message..."):
-    # Save user message to history
+    # Save user message
     st.session_state.messages.append({"role": "user", "content": user_input})
-
-    # Display user message with right alignment and yellow theme
     st.markdown(f'''
     <div class="message-container">
-        <div class="user-avatar">U</div>
-        <div class="user-text"><div class="user-message">{user_input}</div></div>
+        <div class="user-avatar"></div>
+        <div class="user-message">{user_input}</div>
     </div>
     ''', unsafe_allow_html=True)
 
-    # Generate AI response using the English prompt chain
+    # Generate AI response
     with st.spinner("Typing..."):
         response = chain_with_history.invoke(
             {"input": user_input},
             config={"configurable": {"session_id": "default"}}
         )
-
-    # Save AI response to history
+    
+    # Save AI response
     st.session_state.messages.append({"role": "assistant", "content": response.content})
-
-    # Display AI response with left alignment and blue theme
     st.markdown(f'''
     <div class="message-container">
-        <div class="assistant-text"><div class="assistant-message">{response.content}</div></div>
-        <div class="assistant-avatar">A</div>
+        <div class="assistant-message">{response.content}</div>
+        <div class="assistant-avatar"></div>
     </div>
     ''', unsafe_allow_html=True)
 
-    # Send chat update to parent iframe in English format
+    # Send update to parent iframe
     message = {
         "type": "chat-update",
         "messages": st.session_state.messages
@@ -182,7 +209,7 @@ if user_input := st.chat_input("Type your message..."):
     """
     st.markdown(js_code, unsafe_allow_html=True)
 
-# Listen for messages from parent iframe (English compatibility)
+# Listen for parent messages
 st.markdown("""
 <script>
     window.addEventListener('message', function(event) {
