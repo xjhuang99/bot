@@ -6,14 +6,6 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import StreamlitChatMessageHistory
 import streamlit as st
 
-# Streamlit page configuration
-st.set_page_config(
-    page_title="Qwen Chat",
-    page_icon="🤖",
-    layout="centered",
-    initial_sidebar_state="collapsed"
-)
-
 # Minimalist avatar and message bubble styles
 st.markdown("""
 <style>
@@ -44,26 +36,6 @@ st.markdown("""
 }
 .user-container { justify-content: flex-start; }
 .assistant-container { justify-content: flex-end; }
-.typing-indicator-container {
-    width: 100%; display: flex; justify-content: center; align-items: center; margin-bottom: 16px;
-}
-.typing-indicator {
-    background: #FFF8E1; color: #888; border-radius: 16px; padding: 8px 18px; font-size: 16px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-    display: flex; align-items: center; gap: 8px;
-}
-@keyframes blink {
-    0% { opacity: .2; }
-    20% { opacity: 1; }
-    100% { opacity: .2; }
-}
-.typing-dot {
-    background: #FFD700; border-radius: 50%; width: 8px; height: 8px; display: inline-block;
-    margin: 0 2px;
-    animation: blink 1.4s infinite both;
-}
-.typing-dot:nth-child(2) { animation-delay: .2s; }
-.typing-dot:nth-child(3) { animation-delay: .4s; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -124,18 +96,6 @@ for msg in history.messages:
 # User input
 user_input = st.chat_input("Type your message...")
 if user_input:
-    # Show centered typing indicator before response
-    st.markdown('''
-    <div class="typing-indicator-container">
-        <div class="typing-indicator">
-            Typing
-            <span class="typing-dot"></span>
-            <span class="typing-dot"></span>
-            <span class="typing-dot"></span>
-        </div>
-    </div>
-    ''', unsafe_allow_html=True)
-    # Actually get response
     with st.spinner("Typing..."):
         response = chain_with_history.invoke(
             {"input": user_input},
