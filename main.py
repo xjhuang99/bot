@@ -42,8 +42,7 @@ hide_streamlit_style = """
     }
     
     .user-avatar {
-        background-color: #FFD700; /* Yellow for user */
-        order: 2;
+        background-color: #4285F4; /* Blue for user */
         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 12h-4l-3 9L9 3l-3 9H2'%3E%3C/path%3E%3C/svg%3E");
         background-size: 20px;
         background-position: center;
@@ -51,8 +50,7 @@ hide_streamlit_style = """
     }
     
     .assistant-avatar {
-        background-color: #4285F4; /* Blue for AI */
-        order: 0;
+        background-color: #FFD700; /* Yellow for AI */
         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cline x1='12' y1='8' x2='12' y2='12'%3E%3C/line%3E%3Cline x1='12' y1='16' x2='12.01' y2='16'%3E%3C/line%3E%3C/svg%3E");
         background-size: 20px;
         background-position: center;
@@ -60,22 +58,20 @@ hide_streamlit_style = """
     }
     
     .user-message {
-        text-align: right;
-        background-color: #FFF8E1; /* Light yellow */
+        text-align: left;
+        background-color: #E3F2FD; /* Light blue for user */
         padding: 10px 14px;
-        border-radius: 20px 20px 0 20px;
-        order: 1;
+        border-radius: 20px 20px 20px 0;
         min-width: 10px;
         max-width: 70%;
         position: relative;
     }
     
     .assistant-message {
-        text-align: left;
-        background-color: #E3F2FD; /* Light blue */
+        text-align: right;
+        background-color: #FFF8E1; /* Light yellow for AI */
         padding: 10px 14px;
-        border-radius: 20px 20px 20px 0;
-        order: 1;
+        border-radius: 20px 20px 0 20px;
         min-width: 10px;
         max-width: 70%;
         position: relative;
@@ -83,6 +79,19 @@ hide_streamlit_style = """
     
     /* Arrow indicators for message direction */
     .user-message::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: -12px;
+        width: 0;
+        height: 0;
+        border: 12px solid transparent;
+        border-right-color: #E3F2FD;
+        border-top: 0;
+        margin-bottom: -12px;
+    }
+    
+    .assistant-message::after {
         content: "";
         position: absolute;
         bottom: 0;
@@ -95,17 +104,14 @@ hide_streamlit_style = """
         margin-bottom: -12px;
     }
     
-    .assistant-message::after {
-        content: "";
-        position: absolute;
-        bottom: 0;
-        left: -12px;
-        width: 0;
-        height: 0;
-        border: 12px solid transparent;
-        border-right-color: #E3F2FD;
-        border-top: 0;
-        margin-bottom: -12px;
+    /* Container for left-aligned user messages */
+    .user-container {
+        justify-content: flex-start;
+    }
+    
+    /* Container for right-aligned assistant messages */
+    .assistant-container {
+        justify-content: flex-end;
     }
 </style>
 """
@@ -157,14 +163,14 @@ if "messages" not in st.session_state:
 for msg in st.session_state.messages:
     if msg["role"] == "user":
         st.markdown(f'''
-        <div class="message-container">
+        <div class="message-container user-container">
             <div class="user-avatar"></div>
             <div class="user-message">{msg["content"]}</div>
         </div>
         ''', unsafe_allow_html=True)
     else:
         st.markdown(f'''
-        <div class="message-container">
+        <div class="message-container assistant-container">
             <div class="assistant-message">{msg["content"]}</div>
             <div class="assistant-avatar"></div>
         </div>
@@ -175,7 +181,7 @@ if user_input := st.chat_input("Type your message..."):
     # Save user message
     st.session_state.messages.append({"role": "user", "content": user_input})
     st.markdown(f'''
-    <div class="message-container">
+    <div class="message-container user-container">
         <div class="user-avatar"></div>
         <div class="user-message">{user_input}</div>
     </div>
@@ -191,7 +197,7 @@ if user_input := st.chat_input("Type your message..."):
     # Save AI response
     st.session_state.messages.append({"role": "assistant", "content": response.content})
     st.markdown(f'''
-    <div class="message-container">
+    <div class="message-container assistant-container">
         <div class="assistant-message">{response.content}</div>
         <div class="assistant-avatar"></div>
     </div>
