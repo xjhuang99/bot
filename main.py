@@ -6,7 +6,7 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import StreamlitChatMessageHistory
 import streamlit as st
 
-# Streamlit 页面设置
+# Streamlit page configuration
 st.set_page_config(
     page_title="Qwen Chat",
     page_icon="🤖",
@@ -14,7 +14,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 极简头像和消息气泡样式
+# Minimalist avatar and message bubble styles
 st.markdown("""
 <style>
 .message-container { display: flex; align-items: flex-start; margin-bottom: 18px; }
@@ -44,26 +44,46 @@ st.markdown("""
 }
 .user-container { justify-content: flex-start; }
 .assistant-container { justify-content: flex-end; }
+.typing-indicator-container {
+    width: 100%; display: flex; justify-content: center; align-items: center; margin-bottom: 16px;
+}
+.typing-indicator {
+    background: #FFF8E1; color: #888; border-radius: 16px; padding: 8px 18px; font-size: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    display: flex; align-items: center; gap: 8px;
+}
+@keyframes blink {
+    0% { opacity: .2; }
+    20% { opacity: 1; }
+    100% { opacity: .2; }
+}
+.typing-dot {
+    background: #FFD700; border-radius: 50%; width: 8px; height: 8px; display: inline-block;
+    margin: 0 2px;
+    animation: blink 1.4s infinite both;
+}
+.typing-dot:nth-child(2) { animation-delay: .2s; }
+.typing-dot:nth-child(3) { animation-delay: .4s; }
 </style>
 """, unsafe_allow_html=True)
 
-# 设置 API Key
+# Set API Key
 os.environ["DASHSCOPE_API_KEY"] = "sk-15292fd22b02419db281e42552c0e453"
 
-# 初始化模型
+# Initialize model
 llm = ChatTongyi(model_name="qwen-plus")
 
-# 系统提示词
+# System prompt
 try:
     with open('prompt.txt', 'r', encoding='utf-8') as f:
         system_prompt = f.read()
 except FileNotFoundError:
     system_prompt = "You are 'Alex', a study participant texting warmly."
 
-# 聊天历史
+# Chat history
 history = StreamlitChatMessageHistory(key="chat_messages")
 
-# Prompt 模板
+# Prompt template
 prompt = ChatPromptTemplate.from_messages([
     ("system", system_prompt),
     MessagesPlaceholder(variable_name="history"),
@@ -77,10 +97,10 @@ chain_with_history = RunnableWithMessageHistory(
     history_messages_key="history",
 )
 
-# 标题
+# Title
 st.header("AI Chat Interface")
 
-# 显示历史消息
+# Display chat history
 for msg in history.messages:
     if msg.type == "human":
         st.markdown(f'''
@@ -101,14 +121,27 @@ for msg in history.messages:
         </div>
         ''', unsafe_allow_html=True)
 
-# 用户输入
-if user_input := st.chat_input("Type your message..."):
+# User input
+user_input = st.chat_input("Type your message...")
+if user_input:
+    # Show centered typing indicator before response
+    st.markdown('''
+    <div class="typing-indicator-container">
+        <div class="typing-indicator">
+            Typing
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+        </div>
+    </div>
+    ''', unsafe_allow_html=True)
+    # Actually get response
     with st.spinner("Typing..."):
         response = chain_with_history.invoke(
             {"input": user_input},
             config={"configurable": {"session_id": "default"}}
         )
-    # 展示本轮消息
+    # Show user message
     st.markdown(f'''
     <div class="message-container user-container">
         <div class="user-avatar">
@@ -117,6 +150,7 @@ if user_input := st.chat_input("Type your message..."):
         <div class="user-message">{user_input}</div>
     </div>
     ''', unsafe_allow_html=True)
+    # Show assistant message
     st.markdown(f'''
     <div class="message-container assistant-container">
         <div class="assistant-message">{response.content}</div>
@@ -125,7 +159,7 @@ if user_input := st.chat_input("Type your message..."):
         </div>
     </div>
     ''', unsafe_allow_html=True)
-    # 父窗口通信（如需可保留）
+    # Parent window communication (optional)
     message = {
         "type": "chat-update",
         "messages": [{"role": m.type, "content": m.content} for m in history.messages]
@@ -137,7 +171,7 @@ if user_input := st.chat_input("Type your message..."):
     """
     st.markdown(js_code, unsafe_allow_html=True)
 
-# 父窗口监听
+# Parent window listener (optional)
 st.markdown("""
 <script>
     window.addEventListener('message', function(event) {
