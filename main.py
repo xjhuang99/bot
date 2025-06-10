@@ -1,3 +1,6 @@
+To remove the rendering functionality from your chatbot code, simply delete or comment out all code that displays messages (such as any `st.markdown` calls that output chat bubbles). The following code is a clean version with all rendering removed—your bot will process input and maintain history, but will not display any messages in the chat area.
+
+```python
 import os
 import json
 import uuid
@@ -7,9 +10,9 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import StreamlitChatMessageHistory
 import streamlit as st
 
-# 样式保持不变
+# Styles (kept for UI consistency, but not used for rendering)
 st.markdown("""
-<style>
+
 .message-container { display: flex; align-items: flex-start; margin-bottom: 18px; }
 .user-avatar, .assistant-avatar {
     width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
@@ -27,7 +30,7 @@ st.markdown("""
 }
 .user-container { justify-content: flex-start; }
 .assistant-container { justify-content: flex-end; }
-</style>
+
 """, unsafe_allow_html=True)
 
 os.environ["DASHSCOPE_API_KEY"] = "sk-15292fd22b02419db281e42552c0e453"
@@ -64,78 +67,19 @@ st.header("AI Chat Interface")
 
 current_history = history_factory(user_id)
 
-# 使用会话状态管理待处理消息
-if "pending_messages" not in st.session_state:
-    st.session_state.pending_messages = []
-
-# 渲染历史消息和待处理消息
-def render_all_messages():
-    # 渲染历史消息
-    for msg in current_history.messages:
-        render_message(msg)
-    # 渲染待处理消息
-    for msg in st.session_state.pending_messages:
-        render_message(msg)
-
-def render_message(msg):
-    if msg.type == "human":
-        st.markdown(f'''
-        <div class="message-container user-container">
-            <div class="user-avatar">
-                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" fill="white"/><rect x="6" y="14" width="12" height="6" rx="3" fill="white"/></svg>
-            </div>
-            <div class="user-message">{msg.content}</div>
-        </div>
-        ''', unsafe_allow_html=True)
-    elif msg.type == "ai":
-        st.markdown(f'''
-        <div class="message-container assistant-container">
-            <div class="assistant-message">{msg.content}</div>
-            <div class="assistant-avatar">
-                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" fill="white"/><circle cx="12" cy="12" r="5" fill="#FFD700"/></svg>
-            </div>
-        </div>
-        ''', unsafe_allow_html=True)
-
-# 首次渲染已有消息
-render_all_messages()
-
 user_input = st.chat_input("Type your message...")
 if user_input:
-    # 立即添加用户消息到待处理队列
-    user_msg = current_history.create_message(content=user_input, type="human")
-    st.session_state.pending_messages.append(user_msg)
-    
-    # 立即渲染待处理消息
-    st.experimental_rerun()
-
-# 处理待处理消息
-while st.session_state.pending_messages:
-    msg = st.session_state.pending_messages.pop(0)
-    
-    # 正式添加到历史记录
-    current_history.add_message(msg)
-    
     try:
-        # 显示加载状态
-        with st.spinner("Thinking..."):
-            response = chain_with_history.invoke(
-                {"input": msg.content},
-                config={"configurable": {"session_id": user_id}}
-            )
-            
-            # 添加AI回复到历史记录
-            ai_msg = current_history.create_message(content=response.content, type="ai")
-            current_history.add_message(ai_msg)
-            
+        response = chain_with_history.invoke(
+            {"input": user_input},
+            config={"configurable": {"session_id": user_id}}
+        )
     except Exception as e:
-        error_msg = current_history.create_message(content=f"Error: {str(e)}", type="ai")
-        current_history.add_message(error_msg)
-    
-    # 强制刷新显示最新消息
-    st.experimental_rerun()
+        current_history.add_ai_message(f"Error: {str(e)}")
 
-# 父窗口通信
+# Rendering removed: no message display code here
+
+# Optional parent window communication
 if current_history.messages:
     message = {
         "type": "chat-update",
@@ -143,20 +87,26 @@ if current_history.messages:
         "messages": [{"role": m.type, "content": m.content} for m in current_history.messages]
     }
     js_code = f"""
-    <script>
+    
         window.parent.postMessage({json.dumps(message)}, "*");
-    </script>
+    
     """
     st.markdown(js_code, unsafe_allow_html=True)
 
-# 清除聊天处理程序
+# Optional clear chat handler
 st.markdown(f"""
-<script>
+
     window.addEventListener('message', function(event) {{
         if (event.data.type === 'clear-chat' && event.data.user_id === '{user_id}') {{
             window.parent.postMessage({{type: 'chat-cleared', user_id: '{user_id}'}}, '*');
             window.location.reload();
         }}
     }});
-</script>
+
 """, unsafe_allow_html=True)
+```
+
+**Summary:**  
+- All chat message rendering is removed.
+- The chatbot logic and session history remain intact.
+- Only the parent window communication and clear chat handler remain for external integration.
