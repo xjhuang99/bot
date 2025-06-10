@@ -7,7 +7,7 @@ from langchain_community.chat_message_histories import ChatMessageHistory
 import streamlit as st
 
 # Configure API key (replace with your actual key)
-os.environ["DASHSCOPE_API_KEY"] = "xxx"
+os.environ["DASHSCOPE_API_KEY"] = "sk-15292fd22b02419db281e42552c0e453"
 
 # Initialize model
 llm = ChatTongyi(model_name="qwen-plus")
@@ -55,7 +55,7 @@ if user_input := st.chat_input("Type your message..."):
             config={"configurable": {"session_id": "default"}}
         )
         st.markdown(response.content)
-    
+
     # Save response to history
     st.session_state.messages.append({"role": "assistant", "content": response.content})
 
