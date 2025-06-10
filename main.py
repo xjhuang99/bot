@@ -1,12 +1,13 @@
 import os
 import json
+import time
 from langchain_community.chat_models.tongyi import ChatTongyi
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import StreamlitChatMessageHistory
 import streamlit as st
 
-# Minimalist avatar and message bubble styles
+# Message styles with typing indicator
 st.markdown("""
 <style>
 .message-container { display: flex; align-items: flex-start; margin-bottom: 18px; }
@@ -14,18 +15,8 @@ st.markdown("""
     width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
     margin: 0 10px; font-size: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
 }
-.user-avatar {
-    background: #4285F4;
-}
-.user-avatar svg {
-    width: 22px; height: 22px;
-}
-.assistant-avatar {
-    background: #FFD700;
-}
-.assistant-avatar svg {
-    width: 22px; height: 22px;
-}
+.user-avatar { background: #4285F4; }
+.assistant-avatar { background: #FFD700; }
 .user-message {
     background: #E3F2FD; padding: 10px 14px; border-radius: 18px 18px 18px 4px;
     min-width: 10px; max-width: 70%; position: relative; text-align: left;
@@ -36,10 +27,24 @@ st.markdown("""
 }
 .user-container { justify-content: flex-start; }
 .assistant-container { justify-content: flex-end; }
+.typing-indicator {
+    display: inline-block;
+    width: 6px; height: 6px;
+    margin: 0 2px;
+    background-color: #9E9E9E;
+    border-radius: 50%;
+    animation: typing 1.4s infinite ease-in-out both;
+}
+.typing-indicator:nth-child(1) { animation-delay: -0.32s; }
+.typing-indicator:nth-child(2) { animation-delay: -0.16s; }
+@keyframes typing {
+    0%, 80%, 100% { transform: scale(0); }
+    40% { transform: scale(1); }
+}
 </style>
 """, unsafe_allow_html=True)
 
-# Set API Key
+# Set API key
 os.environ["DASHSCOPE_API_KEY"] = "sk-15292fd22b02419db281e42552c0e453"
 
 # Initialize model
@@ -50,12 +55,15 @@ try:
     with open('prompt.txt', 'r', encoding='utf-8') as f:
         system_prompt = f.read()
 except FileNotFoundError:
-    system_prompt = "You are 'Alex', a study participant texting warmly."
+    system_prompt = "You are 'Alex', a study participant texting warmly with natural casual style."
 
-# Chat history
-history = StreamlitChatMessageHistory(key="chat_messages")
+# Chat history management
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = StreamlitChatMessageHistory(key="chat_messages")
 
-# Prompt template
+history = st.session_state.chat_history
+
+# Prompt template with context
 prompt = ChatPromptTemplate.from_messages([
     ("system", system_prompt),
     MessagesPlaceholder(variable_name="history"),
@@ -69,10 +77,10 @@ chain_with_history = RunnableWithMessageHistory(
     history_messages_key="history",
 )
 
-# Title
+# App title
 st.header("AI Chat Interface")
 
-# Display chat history
+# Display existing messages with correct order
 for msg in history.messages:
     if msg.type == "human":
         st.markdown(f'''
@@ -93,15 +101,10 @@ for msg in history.messages:
         </div>
         ''', unsafe_allow_html=True)
 
-# User input
+# User input handling
 user_input = st.chat_input("Type your message...")
 if user_input:
-    # Directly invoke without spinner
-    response = chain_with_history.invoke(
-        {"input": user_input},
-        config={"configurable": {"session_id": "default"}}
-    )
-    # Show user message
+    # Immediately display user message
     st.markdown(f'''
     <div class="message-container user-container">
         <div class="user-avatar">
@@ -110,16 +113,60 @@ if user_input:
         <div class="user-message">{user_input}</div>
     </div>
     ''', unsafe_allow_html=True)
-    # Show assistant message
-    st.markdown(f'''
-    <div class="message-container assistant-container">
-        <div class="assistant-message">{response.content}</div>
-        <div class="assistant-avatar">
-            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" fill="white"/><circle cx="12" cy="12" r="5" fill="#FFD700"/></svg>
+    
+    # Add user message to history immediately
+    history.add_user_message(user_input)
+    
+    # Display typing indicator while generating response
+    assistant_placeholder = st.container()
+    with assistant_placeholder:
+        st.markdown(f'''
+        <div class="message-container assistant-container">
+            <div class="assistant-message">
+                <span class="typing-indicator"></span>
+                <span class="typing-indicator"></span>
+                <span class="typing-indicator"></span>
+            </div>
+            <div class="assistant-avatar">
+                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" fill="white"/><circle cx="12" cy="12" r="5" fill="#FFD700"/></svg>
+            </div>
         </div>
-    </div>
-    ''', unsafe_allow_html=True)
-    # Parent window communication (optional)
+        ''', unsafe_allow_html=True)
+    
+    # Generate AI response asynchronously
+    try:
+        response = chain_with_history.invoke(
+            {"input": user_input},
+            config={"configurable": {"session_id": "default"}}
+        )
+        
+        # Update typing indicator to actual response
+        assistant_placeholder.empty()
+        st.markdown(f'''
+        <div class="message-container assistant-container">
+            <div class="assistant-message">{response.content}</div>
+            <div class="assistant-avatar">
+                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" fill="white"/><circle cx="12" cy="12" r="5" fill="#FFD700"/></svg>
+            </div>
+        </div>
+        ''', unsafe_allow_html=True)
+        
+        # Add AI response to history
+        history.add_ai_message(response.content)
+        
+    except Exception as e:
+        assistant_placeholder.empty()
+        st.markdown(f'''
+        <div class="message-container assistant-container">
+            <div class="assistant-message">Oops, something went wrong: {str(e)}</div>
+            <div class="assistant-avatar">
+                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" fill="white"/><circle cx="12" cy="12" r="5" fill="#FFD700"/></svg>
+            </div>
+        </div>
+        ''', unsafe_allow_html=True)
+
+# Parent window communication (optional)
+if history.messages:
     message = {
         "type": "chat-update",
         "messages": [{"role": m.type, "content": m.content} for m in history.messages]
@@ -136,6 +183,7 @@ st.markdown("""
 <script>
     window.addEventListener('message', function(event) {
         if (event.data.type === 'clear-chat') {
+            st.session_state.chat_history = StreamlitChatMessageHistory(key="chat_messages");
             window.parent.postMessage({type: 'chat-cleared'}, '*');
         }
     });
