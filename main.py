@@ -1,13 +1,12 @@
 import os
 import json
-import time
 from langchain_community.chat_models.tongyi import ChatTongyi
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import StreamlitChatMessageHistory
 import streamlit as st
 
-# Message styles with typing indicator
+# Message styles
 st.markdown("""
 <style>
 .message-container { display: flex; align-items: flex-start; margin-bottom: 18px; }
@@ -27,20 +26,6 @@ st.markdown("""
 }
 .user-container { justify-content: flex-start; }
 .assistant-container { justify-content: flex-end; }
-.typing-indicator {
-    display: inline-block;
-    width: 6px; height: 6px;
-    margin: 0 2px;
-    background-color: #9E9E9E;
-    border-radius: 50%;
-    animation: typing 1.4s infinite ease-in-out both;
-}
-.typing-indicator:nth-child(1) { animation-delay: -0.32s; }
-.typing-indicator:nth-child(2) { animation-delay: -0.16s; }
-@keyframes typing {
-    0%, 80%, 100% { transform: scale(0); }
-    40% { transform: scale(1); }
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -57,7 +42,7 @@ try:
 except FileNotFoundError:
     system_prompt = "You are 'Alex', a study participant texting warmly with natural casual style."
 
-# Chat history management
+# Manage chat history in session state
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = StreamlitChatMessageHistory(key="chat_messages")
 
@@ -80,7 +65,7 @@ chain_with_history = RunnableWithMessageHistory(
 # App title
 st.header("AI Chat Interface")
 
-# Display existing messages with correct order
+# Display existing messages in order
 for msg in history.messages:
     if msg.type == "human":
         st.markdown(f'''
@@ -101,10 +86,13 @@ for msg in history.messages:
         </div>
         ''', unsafe_allow_html=True)
 
-# User input handling
+# User input handling with proper order
 user_input = st.chat_input("Type your message...")
 if user_input:
-    # Immediately display user message
+    # Add user message to history first
+    history.add_user_message(user_input)
+    
+    # Display user message immediately
     st.markdown(f'''
     <div class="message-container user-container">
         <div class="user-avatar">
@@ -114,34 +102,17 @@ if user_input:
     </div>
     ''', unsafe_allow_html=True)
     
-    # Add user message to history immediately
-    history.add_user_message(user_input)
-    
-    # Display typing indicator while generating response
-    assistant_placeholder = st.container()
-    with assistant_placeholder:
-        st.markdown(f'''
-        <div class="message-container assistant-container">
-            <div class="assistant-message">
-                <span class="typing-indicator"></span>
-                <span class="typing-indicator"></span>
-                <span class="typing-indicator"></span>
-            </div>
-            <div class="assistant-avatar">
-                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" fill="white"/><circle cx="12" cy="12" r="5" fill="#FFD700"/></svg>
-            </div>
-        </div>
-        ''', unsafe_allow_html=True)
-    
-    # Generate AI response asynchronously
+    # Generate AI response
     try:
         response = chain_with_history.invoke(
             {"input": user_input},
             config={"configurable": {"session_id": "default"}}
         )
         
-        # Update typing indicator to actual response
-        assistant_placeholder.empty()
+        # Add AI response to history
+        history.add_ai_message(response.content)
+        
+        # Display AI response after generation
         st.markdown(f'''
         <div class="message-container assistant-container">
             <div class="assistant-message">{response.content}</div>
@@ -151,14 +122,11 @@ if user_input:
         </div>
         ''', unsafe_allow_html=True)
         
-        # Add AI response to history
-        history.add_ai_message(response.content)
-        
     except Exception as e:
-        assistant_placeholder.empty()
+        # Handle errors gracefully
         st.markdown(f'''
         <div class="message-container assistant-container">
-            <div class="assistant-message">Oops, something went wrong: {str(e)}</div>
+            <div class="assistant-message">Oops, an error occurred: {str(e)}</div>
             <div class="assistant-avatar">
                 <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" fill="white"/><circle cx="12" cy="12" r="5" fill="#FFD700"/></svg>
             </div>
