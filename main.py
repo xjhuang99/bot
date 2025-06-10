@@ -7,7 +7,7 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import StreamlitChatMessageHistory
 import streamlit as st
 
-# 样式
+# 样式 (保持不变)
 st.markdown("""
 <style>
 .message-container { display: flex; align-items: flex-start; margin-bottom: 18px; }
@@ -30,36 +30,36 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# API Key
+# API Key (保持不变)
 os.environ["DASHSCOPE_API_KEY"] = "sk-15292fd22b02419db281e42552c0e453"
 
-# 模型
+# 模型 (保持不变)
 llm = ChatTongyi(model_name="qwen-plus")
 
-# 系统提示
+# 系统提示 (保持不变)
 try:
     with open('prompt.txt', 'r', encoding='utf-8') as f:
         system_prompt = f.read()
 except FileNotFoundError:
     system_prompt = "You are 'Alex', a study participant texting warmly."
 
-# 唯一用户ID
+# 唯一用户ID (保持不变)
 if "user_id" not in st.session_state:
     st.session_state.user_id = str(uuid.uuid4())
 user_id = st.session_state.user_id
 
-# 历史工厂：为每个用户单独创建
+# 历史工厂：为每个用户单独创建 (保持不变)
 def history_factory(session_id):
     return StreamlitChatMessageHistory(key=f"chat_history_{session_id}")
 
-# 提示模板
+# 提示模板 (保持不变)
 prompt = ChatPromptTemplate.from_messages([
     ("system", system_prompt),
     MessagesPlaceholder(variable_name="history"),
     ("human", "{input}"),
 ])
 
-# 带历史的链
+# 带历史的链 (保持不变，但现在依赖自动历史)
 chain = prompt | llm
 chain_with_history = RunnableWithMessageHistory(
     chain,
@@ -68,31 +68,13 @@ chain_with_history = RunnableWithMessageHistory(
     history_messages_key="history",
 )
 
-# 标题
+# 标题 (保持不变)
 st.header("AI Chat Interface")
 
 # 获取当前用户的历史记录
 current_history = history_factory(user_id)
 
-# 用户输入处理
-user_input = st.chat_input("Type your message...")
-if user_input:
-    # 显示用户消息
-    with st.spinner("Thinking..."):
-        try:
-            # 调用模型并获取响应
-            response = chain_with_history.invoke(
-                {"input": user_input},
-                config={"configurable": {"session_id": user_id}}
-            )
-            # 确保消息被添加到历史记录
-            current_history = history_factory(user_id)
-        except Exception as e:
-            # 添加错误消息到历史记录
-            current_history.add_ai_message(f"Error: {str(e)}")
-            current_history = history_factory(user_id)
-
-# 渲染所有消息（包括新添加的）
+# 渲染当前用户的历史记录 (修复：添加消息渲染代码)
 for msg in current_history.messages:
     if msg.type == "human":
         st.markdown(f'''
@@ -113,7 +95,18 @@ for msg in current_history.messages:
         </div>
         ''', unsafe_allow_html=True)
 
-# 父窗口通信
+# 用户输入处理 (保持不变)
+user_input = st.chat_input("Type your message...")
+if user_input:
+    try:
+        response = chain_with_history.invoke(
+            {"input": user_input},
+            config={"configurable": {"session_id": user_id}}
+        )
+    except Exception as e:
+        current_history.add_ai_message(f"Error: {str(e)}")
+
+# 父窗口通信 (可选，保持不变)
 if current_history.messages:
     message = {
         "type": "chat-update",
@@ -127,7 +120,7 @@ if current_history.messages:
     """
     st.markdown(js_code, unsafe_allow_html=True)
 
-# 清除聊天处理程序
+# 清除聊天处理程序 (可选，保持不变)
 st.markdown(f"""
 <script>
     window.addEventListener('message', function(event) {{
@@ -137,4 +130,4 @@ st.markdown(f"""
         }}
     }});
 </script>
-""", unsafe_allow_html=True)
+""", unsafe_allow_html=True)    
