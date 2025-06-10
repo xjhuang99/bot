@@ -21,6 +21,29 @@ hide_streamlit_style = """
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
+
+    /* Custom styles for message alignment */
+    .user-message {
+        text-align: right;
+        margin-left: 30%;
+        background-color: #dcf8c6;
+        padding: 8px 12px;
+        border-radius: 18px 18px 0 18px;
+        margin-bottom: 10px;
+    }
+
+    .assistant-message {
+        text-align: left;
+        margin-right: 30%;
+        background-color: white;
+        padding: 8px 12px;
+        border-radius: 18px 18px 18px 0;
+        margin-bottom: 10px;
+    }
+
+    .message-container {
+        margin-bottom: 15px;
+    }
 </style>
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
@@ -67,28 +90,37 @@ st.header("AI Chat Interface")
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display chat history with proper role indication
+# Display chat history with custom alignment
 for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+    if msg["role"] == "user":
+        st.markdown(f'<div class="message-container"><div class="user-message">{msg["content"]}</div></div>',
+                    unsafe_allow_html=True)
+    else:  # assistant
+        st.markdown(f'<div class="message-container"><div class="assistant-message">{msg["content"]}</div></div>',
+                    unsafe_allow_html=True)
 
 # Handle user input in English
 if user_input := st.chat_input("Type your message..."):
     # Save user message to history
     st.session_state.messages.append({"role": "user", "content": user_input})
-    with st.chat_message("user"):
-        st.markdown(user_input)
+
+    # Display user message with right alignment
+    st.markdown(f'<div class="message-container"><div class="user-message">{user_input}</div></div>',
+                unsafe_allow_html=True)
 
     # Generate AI response using the English prompt chain
-    with st.chat_message("assistant"):
+    with st.spinner("Typing..."):
         response = chain_with_history.invoke(
             {"input": user_input},
             config={"configurable": {"session_id": "default"}}
         )
-        st.markdown(response.content)
 
     # Save AI response to history
     st.session_state.messages.append({"role": "assistant", "content": response.content})
+
+    # Display AI response with left alignment
+    st.markdown(f'<div class="message-container"><div class="assistant-message">{response.content}</div></div>',
+                unsafe_allow_html=True)
 
     # Send chat update to parent iframe in English format
     message = {
