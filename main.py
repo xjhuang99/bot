@@ -22,27 +22,59 @@ hide_streamlit_style = """
     footer {visibility: hidden;}
     header {visibility: hidden;}
 
-    /* Custom styles for message alignment */
+    /* Custom styles for message alignment and avatars */
+    .message-container {
+        display: flex;
+        align-items: flex-end;
+        margin-bottom: 15px;
+    }
+    
+    .avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        margin: 0 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        margin-bottom: 4px;
+    }
+    
+    .user-avatar {
+        background-color: #FFD700; /* Yellow for user */
+        order: 2;
+    }
+    
+    .assistant-avatar {
+        background-color: #90CAF9; /* Light blue for AI */
+        order: 0;
+    }
+    
     .user-message {
         text-align: right;
-        margin-left: 30%;
-        background-color: #dcf8c6;
+        margin-left: 10px;
+        background-color: #FFFACD; /* Light yellow */
         padding: 8px 12px;
         border-radius: 18px 18px 0 18px;
-        margin-bottom: 10px;
+        order: 1;
     }
-
+    
     .assistant-message {
         text-align: left;
-        margin-right: 30%;
-        background-color: white;
+        margin-right: 10px;
+        background-color: #E3F2FD; /* Light blue */
         padding: 8px 12px;
         border-radius: 18px 18px 18px 0;
-        margin-bottom: 10px;
+        order: 1;
     }
-
-    .message-container {
-        margin-bottom: 15px;
+    
+    .user-text {
+        order: 2;
+    }
+    
+    .assistant-text {
+        order: 0;
     }
 </style>
 """
@@ -90,23 +122,35 @@ st.header("AI Chat Interface")
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display chat history with custom alignment
+# Display chat history with avatars and custom alignment
 for msg in st.session_state.messages:
     if msg["role"] == "user":
-        st.markdown(f'<div class="message-container"><div class="user-message">{msg["content"]}</div></div>',
-                    unsafe_allow_html=True)
+        st.markdown(f'''
+        <div class="message-container">
+            <div class="user-avatar">U</div>
+            <div class="user-text"><div class="user-message">{msg["content"]}</div></div>
+        </div>
+        ''', unsafe_allow_html=True)
     else:  # assistant
-        st.markdown(f'<div class="message-container"><div class="assistant-message">{msg["content"]}</div></div>',
-                    unsafe_allow_html=True)
+        st.markdown(f'''
+        <div class="message-container">
+            <div class="assistant-text"><div class="assistant-message">{msg["content"]}</div></div>
+            <div class="assistant-avatar">A</div>
+        </div>
+        ''', unsafe_allow_html=True)
 
 # Handle user input in English
 if user_input := st.chat_input("Type your message..."):
     # Save user message to history
     st.session_state.messages.append({"role": "user", "content": user_input})
 
-    # Display user message with right alignment
-    st.markdown(f'<div class="message-container"><div class="user-message">{user_input}</div></div>',
-                unsafe_allow_html=True)
+    # Display user message with right alignment and yellow theme
+    st.markdown(f'''
+    <div class="message-container">
+        <div class="user-avatar">U</div>
+        <div class="user-text"><div class="user-message">{user_input}</div></div>
+    </div>
+    ''', unsafe_allow_html=True)
 
     # Generate AI response using the English prompt chain
     with st.spinner("Typing..."):
@@ -118,9 +162,13 @@ if user_input := st.chat_input("Type your message..."):
     # Save AI response to history
     st.session_state.messages.append({"role": "assistant", "content": response.content})
 
-    # Display AI response with left alignment
-    st.markdown(f'<div class="message-container"><div class="assistant-message">{response.content}</div></div>',
-                unsafe_allow_html=True)
+    # Display AI response with left alignment and blue theme
+    st.markdown(f'''
+    <div class="message-container">
+        <div class="assistant-text"><div class="assistant-message">{response.content}</div></div>
+        <div class="assistant-avatar">A</div>
+    </div>
+    ''', unsafe_allow_html=True)
 
     # Send chat update to parent iframe in English format
     message = {
