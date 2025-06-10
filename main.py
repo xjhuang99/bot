@@ -1,12 +1,13 @@
 import os
 import json
+import uuid
 from langchain_community.chat_models.tongyi import ChatTongyi
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import StreamlitChatMessageHistory
 import streamlit as st
 
-# Message styles
+# Style updates (unchanged)
 st.markdown("""
 <style>
 .message-container { display: flex; align-items: flex-start; margin-bottom: 18px; }
@@ -29,44 +30,50 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Set API key
+# API Key (unchanged)
 os.environ["DASHSCOPE_API_KEY"] = "sk-15292fd22b02419db281e42552c0e453"
 
-# Initialize model
+# Model initialization (unchanged)
 llm = ChatTongyi(model_name="qwen-plus")
 
-# System prompt
+# System prompt (unchanged)
 try:
     with open('prompt.txt', 'r', encoding='utf-8') as f:
         system_prompt = f.read()
 except FileNotFoundError:
-    system_prompt = "You are 'Alex', a study participant texting warmly with natural casual style."
+    system_prompt = "You are 'Alex', a study participant texting warmly."
 
-# Manage chat history in session state
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = StreamlitChatMessageHistory(key="chat_messages")
+# Unique user ID for session separation
+if "user_id" not in st.session_state:
+    st.session_state.user_id = str(uuid.uuid4())  # Unique ID per participant
+user_id = st.session_state.user_id
 
-history = st.session_state.chat_history
+# History factory: Separate storage per user ID
+def history_factory(session_id):
+    return StreamlitChatMessageHistory(key=f"chat_history_{session_id}")
 
-# Prompt template with context
+# Prompt template (updated to use dynamic history)
 prompt = ChatPromptTemplate.from_messages([
     ("system", system_prompt),
     MessagesPlaceholder(variable_name="history"),
     ("human", "{input}"),
 ])
+
+# Chain with per-user history
 chain = prompt | llm
 chain_with_history = RunnableWithMessageHistory(
     chain,
-    lambda session_id: history,
+    history_factory,  # Creates separate history for each session ID
     input_messages_key="input",
     history_messages_key="history",
 )
 
-# App title
+# App title (unchanged)
 st.header("AI Chat Interface")
 
-# Display existing messages in order
-for msg in history.messages:
+# Render current user's conversation history
+current_history = history_factory(user_id)
+for msg in current_history.messages:
     if msg.type == "human":
         st.markdown(f'''
         <div class="message-container user-container">
@@ -86,58 +93,28 @@ for msg in history.messages:
         </div>
         ''', unsafe_allow_html=True)
 
-# User input handling with proper order
+# User input handling (with unique session ID)
 user_input = st.chat_input("Type your message...")
 if user_input:
-    # Add user message to history first
-    history.add_user_message(user_input)
+    # Add user message to their unique history
+    current_history.add_user_message(user_input)
     
-    # Display user message immediately
-    st.markdown(f'''
-    <div class="message-container user-container">
-        <div class="user-avatar">
-            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" fill="white"/><rect x="6" y="14" width="12" height="6" rx="3" fill="white"/></svg>
-        </div>
-        <div class="user-message">{user_input}</div>
-    </div>
-    ''', unsafe_allow_html=True)
-    
-    # Generate AI response
+    # Generate response using the user's unique session ID
     try:
         response = chain_with_history.invoke(
             {"input": user_input},
-            config={"configurable": {"session_id": "default"}}
+            config={"configurable": {"session_id": user_id}}
         )
-        
-        # Add AI response to history
-        history.add_ai_message(response.content)
-        
-        # Display AI response after generation
-        st.markdown(f'''
-        <div class="message-container assistant-container">
-            <div class="assistant-message">{response.content}</div>
-            <div class="assistant-avatar">
-                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" fill="white"/><circle cx="12" cy="12" r="5" fill="#FFD700"/></svg>
-            </div>
-        </div>
-        ''', unsafe_allow_html=True)
-        
+        current_history.add_ai_message(response.content)
     except Exception as e:
-        # Handle errors gracefully
-        st.markdown(f'''
-        <div class="message-container assistant-container">
-            <div class="assistant-message">Oops, an error occurred: {str(e)}</div>
-            <div class="assistant-avatar">
-                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" fill="white"/><circle cx="12" cy="12" r="5" fill="#FFD700"/></svg>
-            </div>
-        </div>
-        ''', unsafe_allow_html=True)
+        current_history.add_ai_message(f"Error: {str(e)}")
 
-# Parent window communication (optional)
-if history.messages:
+# Parent window communication (optional - pass user ID in message)
+if current_history.messages:
     message = {
         "type": "chat-update",
-        "messages": [{"role": m.type, "content": m.content} for m in history.messages]
+        "user_id": user_id,
+        "messages": [{"role": m.type, "content": m.content} for m in current_history.messages]
     }
     js_code = f"""
     <script>
@@ -146,14 +123,14 @@ if history.messages:
     """
     st.markdown(js_code, unsafe_allow_html=True)
 
-# Parent window listener (optional)
-st.markdown("""
+# Clear chat handler (optional - include user ID)
+st.markdown(f"""
 <script>
-    window.addEventListener('message', function(event) {
-        if (event.data.type === 'clear-chat') {
-            st.session_state.chat_history = StreamlitChatMessageHistory(key="chat_messages");
-            window.parent.postMessage({type: 'chat-cleared'}, '*');
-        }
-    });
+    window.addEventListener('message', function(event) {{
+        if (event.data.type === 'clear-chat' && event.data.user_id === '{user_id}') {{
+            window.parent.postMessage({{type: 'chat-cleared', user_id: '{user_id}'}}, '*');
+            window.location.reload();
+        }}
+    }});
 </script>
 """, unsafe_allow_html=True)
