@@ -52,7 +52,7 @@ try:
 except FileNotFoundError:
     system_prompt = "You are 'Alex', a study participant texting warmly."
 
-# Chat history
+# Chat history for LangChain
 history = StreamlitChatMessageHistory(key="chat_messages")
 
 # Prompt template
@@ -72,21 +72,25 @@ chain_with_history = RunnableWithMessageHistory(
 # Title
 st.header("AI Chat Interface")
 
-# Display chat history
-for msg in history.messages:
-    if msg.type == "human":
+# Initialize session state messages if not present
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# Display chat history from session_state
+for msg in st.session_state.messages:
+    if msg["role"] == "user":
         st.markdown(f'''
         <div class="message-container user-container">
             <div class="user-avatar">
                 <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" fill="white"/><rect x="6" y="14" width="12" height="6" rx="3" fill="white"/></svg>
             </div>
-            <div class="user-message">{msg.content}</div>
+            <div class="user-message">{msg["content"]}</div>
         </div>
         ''', unsafe_allow_html=True)
     else:
         st.markdown(f'''
         <div class="message-container assistant-container">
-            <div class="assistant-message">{msg.content}</div>
+            <div class="assistant-message">{msg["content"]}</div>
             <div class="assistant-avatar">
                 <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" fill="white"/><circle cx="12" cy="12" r="5" fill="#FFD700"/></svg>
             </div>
@@ -95,34 +99,30 @@ for msg in history.messages:
 
 # User input
 user_input = st.chat_input("Type your message...")
+
 if user_input:
-    # Directly invoke without spinner
-    response = chain_with_history.invoke(
-        {"input": user_input},
-        config={"configurable": {"session_id": "default"}}
-    )
-    # Show user message
-    st.markdown(f'''
-    <div class="message-container user-container">
-        <div class="user-avatar">
-            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" fill="white"/><rect x="6" y="14" width="12" height="6" rx="3" fill="white"/></svg>
-        </div>
-        <div class="user-message">{user_input}</div>
-    </div>
-    ''', unsafe_allow_html=True)
-    # Show assistant message
-    st.markdown(f'''
-    <div class="message-container assistant-container">
-        <div class="assistant-message">{response.content}</div>
-        <div class="assistant-avatar">
-            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" fill="white"/><circle cx="12" cy="12" r="5" fill="#FFD700"/></svg>
-        </div>
-    </div>
-    ''', unsafe_allow_html=True)
-    # Parent window communication (optional)
+    # 1. Immediately show user message
+    st.session_state.messages.append({"role": "user", "content": user_input})
+    st.experimental_rerun()  # Rerun to immediately display the user message
+
+# 2. If the last message is from user and not yet answered, call the AI and show the reply
+if st.session_state.messages:
+    last_msg = st.session_state.messages[-1]
+    if last_msg["role"] == "user" and (len(st.session_state.messages) == 1 or st.session_state.messages[-2]["role"] != "assistant"):
+        # Call the AI
+        response = chain_with_history.invoke(
+            {"input": last_msg["content"]},
+            config={"configurable": {"session_id": "default"}}
+        )
+        # Save assistant message
+        st.session_state.messages.append({"role": "assistant", "content": response.content})
+        st.experimental_rerun()  # Rerun to display the assistant message
+
+# Parent window communication (optional)
+if st.session_state.get("messages"):
     message = {
         "type": "chat-update",
-        "messages": [{"role": m.type, "content": m.content} for m in history.messages]
+        "messages": st.session_state["messages"]
     }
     js_code = f"""
     <script>
