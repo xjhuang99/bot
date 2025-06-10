@@ -7,15 +7,15 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import ChatMessageHistory
 import streamlit as st
 
-# 配置页面设置，适合iframe嵌入
+# Configure page settings for iframe embedding
 st.set_page_config(
     page_title="Qwen Chat",
     page_icon="🤖",
-    layout="centered",  # 紧凑布局更适合iframe
-    initial_sidebar_state="collapsed"  # 侧边栏默认折叠
+    layout="centered",  # Compact layout suitable for iframe
+    initial_sidebar_state="collapsed"  # Sidebar collapsed by default
 )
 
-# 移除页面底部的"Made with Streamlit"和汉堡菜单
+# Hide Streamlit footer and menu for cleaner interface
 hide_streamlit_style = """
 <style>
     #MainMenu {visibility: hidden;}
@@ -25,20 +25,33 @@ hide_streamlit_style = """
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-# 配置API密钥
+# Set API key for model authentication
 os.environ["DASHSCOPE_API_KEY"] = "sk-15292fd22b02419db281e42552c0e453"
 
-# 初始化模型
+# Initialize the chat model
 llm = ChatTongyi(model_name="qwen-plus")
 
-# 定义提示模板
+# Define prompt template with English instructions (loaded from file)
+try:
+    with open('prompt.txt', 'r', encoding='utf-8') as f:
+        system_prompt = f.read()
+except FileNotFoundError:
+    system_prompt = """
+    You are "Alex", a study participant texting warmly. Use casual style:
+    - lowercase, abbreviations (e.g., w/ for with), minimal punctuation
+    - 5-7 intentional typos/grammar errors in conversation
+    - occasional casual swearing for authenticity
+    - always validate the other person's feelings
+    """
+
+# Construct the prompt with system message and history placeholder
 prompt = ChatPromptTemplate.from_messages([
-    ("system", "You are a friendly chatbot. Please respond in a natural and concise manner."),
+    ("system", system_prompt),
     MessagesPlaceholder(variable_name="history"),
     ("human", "{input}"),
 ])
 
-# 构建对话链
+# Build the conversation chain with message history
 chain = prompt | llm
 chain_with_history = RunnableWithMessageHistory(
     chain,
@@ -47,26 +60,26 @@ chain_with_history = RunnableWithMessageHistory(
     history_messages_key="history",
 )
 
-# 标题使用较小的字体，适合iframe空间
+# Set up the English-language interface title
 st.header("AI Chat Interface")
 
-# 初始化会话状态
+# Initialize session state for message history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# 显示聊天历史
+# Display chat history with proper role indication
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# 用户输入处理
+# Handle user input in English
 if user_input := st.chat_input("Type your message..."):
-    # 保存用户消息
+    # Save user message to history
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # 生成AI回复
+    # Generate AI response using the English prompt chain
     with st.chat_message("assistant"):
         response = chain_with_history.invoke(
             {"input": user_input},
@@ -74,10 +87,10 @@ if user_input := st.chat_input("Type your message..."):
         )
         st.markdown(response.content)
 
-    # 保存回复到历史
+    # Save AI response to history
     st.session_state.messages.append({"role": "assistant", "content": response.content})
 
-    # 发送消息给父页面（iframe容器）
+    # Send chat update to parent iframe in English format
     message = {
         "type": "chat-update",
         "messages": st.session_state.messages
@@ -89,14 +102,11 @@ if user_input := st.chat_input("Type your message..."):
     """
     st.markdown(js_code, unsafe_allow_html=True)
 
-# 监听来自父页面的消息
+# Listen for messages from parent iframe (English compatibility)
 st.markdown("""
 <script>
-    // 监听父页面消息
     window.addEventListener('message', function(event) {
-        // 处理接收到的消息
         if (event.data.type === 'clear-chat') {
-            // 清空聊天历史的逻辑
             window.parent.postMessage({type: 'chat-cleared'}, '*');
         }
     });
