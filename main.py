@@ -1,39 +1,61 @@
 import os
 import json
-import uuid
 from langchain_community.chat_models.tongyi import ChatTongyi
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import StreamlitChatMessageHistory
 import streamlit as st
 
-# 样式保持不变
+# Minimalist avatar and message bubble styles
 st.markdown("""
 <style>
-/* 原有样式保持不变 */
+.message-container { display: flex; align-items: flex-start; margin-bottom: 18px; }
+.user-avatar, .assistant-avatar {
+    width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    margin: 0 10px; font-size: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.user-avatar {
+    background: #4285F4;
+}
+.user-avatar svg {
+    width: 22px; height: 22px;
+}
+.assistant-avatar {
+    background: #FFD700;
+}
+.assistant-avatar svg {
+    width: 22px; height: 22px;
+}
+.user-message {
+    background: #E3F2FD; padding: 10px 14px; border-radius: 18px 18px 18px 4px;
+    min-width: 10px; max-width: 70%; position: relative; text-align: left;
+}
+.assistant-message {
+    background: #FFF8E1; padding: 10px 14px; border-radius: 18px 18px 4px 18px;
+    min-width: 10px; max-width: 70%; position: relative; text-align: left;
+}
+.user-container { justify-content: flex-start; }
+.assistant-container { justify-content: flex-end; }
 </style>
 """, unsafe_allow_html=True)
 
+# Set API Key
 os.environ["DASHSCOPE_API_KEY"] = "sk-15292fd22b02419db281e42552c0e453"
+
+# Initialize model
 llm = ChatTongyi(model_name="qwen-plus")
 
-# 系统提示词
+# System prompt
 try:
     with open('prompt.txt', 'r', encoding='utf-8') as f:
         system_prompt = f.read()
 except FileNotFoundError:
     system_prompt = "You are 'Alex', a study participant texting warmly."
 
-# 用户ID管理
-if "user_id" not in st.session_state:
-    st.session_state.user_id = str(uuid.uuid4())
-user_id = st.session_state.user_id
+# Chat history for LangChain
+history = StreamlitChatMessageHistory(key="chat_messages")
 
-# 历史记录工厂
-def history_factory(session_id):
-    return StreamlitChatMessageHistory(key=f"chat_history_{session_id}")
-
-# 对话链
+# Prompt template
 prompt = ChatPromptTemplate.from_messages([
     ("system", system_prompt),
     MessagesPlaceholder(variable_name="history"),
@@ -42,69 +64,65 @@ prompt = ChatPromptTemplate.from_messages([
 chain = prompt | llm
 chain_with_history = RunnableWithMessageHistory(
     chain,
-    history_factory,
+    lambda session_id: history,
     input_messages_key="input",
     history_messages_key="history",
 )
 
-# 界面标题
+# Title
 st.header("AI Chat Interface")
 
-# 获取当前用户的历史记录
-current_history = history_factory(user_id)
+# Initialize session state messages if not present
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-# 显示消息的核心逻辑
-def render_messages():
-    for msg in current_history.messages:
-        if msg.type == "human":
-            st.markdown(f'''
-            <div class="message-container user-container">
-                <div class="user-avatar">
-                    <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" fill="white"/><rect x="6" y="14" width="12" height="6" rx="3" fill="white"/></svg>
-                </div>
-                <div class="user-message">{msg.content}</div>
-            </div>
-            ''', unsafe_allow_html=True)
-        else:
-            st.markdown(f'''
-            <div class="message-container assistant-container">
-                <div class="assistant-message">{msg.content}</div>
-                <div class="assistant-avatar">
-                    <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" fill="white"/><circle cx="12" cy="12" r="5" fill="#FFD700"/></svg>
-                </div>
-            </div>
-            ''', unsafe_allow_html=True)
-
-# 先渲染已有消息
-render_messages()
-
-# 用户输入处理
+# User input
 user_input = st.chat_input("Type your message...")
+
+# If user sends a message, append it immediately
 if user_input:
-    # 第一步：立即添加并显示用户消息
-    current_history.add_user_message(user_input)
-    st.experimental_rerun()
+    st.session_state.messages.append({"role": "user", "content": user_input})
 
-# 第二步：处理AI响应
-if current_history.messages:
-    last_msg = current_history.messages[-1]
-    if last_msg.type == "human" and (len(current_history.messages) < 2 or current_history.messages[-2].type != "ai"):
-        try:
-            response = chain_with_history.invoke(
-                {"input": last_msg.content},
-                config={"configurable": {"session_id": user_id}}
-            )
-            # 自动添加AI消息到历史记录
-        except Exception as e:
-            current_history.add_ai_message(f"Error: {str(e)}")
-        st.experimental_rerun()
+# Display chat history from session_state
+for msg in st.session_state.messages:
+    if msg["role"] == "user":
+        st.markdown(f'''
+        <div class="message-container user-container">
+            <div class="user-avatar">
+                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" fill="white"/><rect x="6" y="14" width="12" height="6" rx="3" fill="white"/></svg>
+            </div>
+            <div class="user-message">{msg["content"]}</div>
+        </div>
+        ''', unsafe_allow_html=True)
+    else:
+        st.markdown(f'''
+        <div class="message-container assistant-container">
+            <div class="assistant-message">{msg["content"]}</div>
+            <div class="assistant-avatar">
+                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" fill="white"/><circle cx="12" cy="12" r="5" fill="#FFD700"/></svg>
+            </div>
+        </div>
+        ''', unsafe_allow_html=True)
 
-# 父窗口通信（可选）
-if current_history.messages:
+# If the last message is from user and not yet answered, call the AI and show the reply
+if st.session_state.messages:
+    last_msg = st.session_state.messages[-1]
+    # Only respond if the last message is from user and there is no pending assistant reply
+    if last_msg["role"] == "user" and (
+        len(st.session_state.messages) == 1 or st.session_state.messages[-2]["role"] != "assistant"
+    ):
+        response = chain_with_history.invoke(
+            {"input": last_msg["content"]},
+            config={"configurable": {"session_id": "default"}}
+        )
+        st.session_state.messages.append({"role": "assistant", "content": response.content})
+        st.experimental_rerun = lambda: None  # Disable rerun to avoid AttributeError
+
+# Parent window communication (optional)
+if st.session_state.get("messages"):
     message = {
         "type": "chat-update",
-        "user_id": user_id,
-        "messages": [{"role": m.type, "content": m.content} for m in current_history.messages]
+        "messages": st.session_state["messages"]
     }
     js_code = f"""
     <script>
@@ -113,14 +131,13 @@ if current_history.messages:
     """
     st.markdown(js_code, unsafe_allow_html=True)
 
-# 清除聊天处理器（可选）
-st.markdown(f"""
+# Parent window listener (optional)
+st.markdown("""
 <script>
-    window.addEventListener('message', function(event) {{
-        if (event.data.type === 'clear-chat' && event.data.user_id === '{user_id}') {{
-            window.parent.postMessage({{type: 'chat-cleared', user_id: '{user_id}'}}, '*');
-            window.location.reload();
-        }}
-    }});
+    window.addEventListener('message', function(event) {
+        if (event.data.type === 'clear-chat') {
+            window.parent.postMessage({type: 'chat-cleared'}, '*');
+        }
+    });
 </script>
 """, unsafe_allow_html=True)
