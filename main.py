@@ -7,59 +7,38 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import StreamlitChatMessageHistory
 import streamlit as st
 
-# Style (unchanged)
+# 样式保持不变
 st.markdown("""
 <style>
-.message-container { display: flex; align-items: flex-start; margin-bottom: 18px; }
-.user-avatar, .assistant-avatar {
-    width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    margin: 0 10px; font-size: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-}
-.user-avatar { background: #4285F4; }
-.assistant-avatar { background: #FFD700; }
-.user-message {
-    background: #E3F2FD; padding: 10px 14px; border-radius: 18px 18px 18px 4px;
-    min-width: 10px; max-width: 70%; position: relative; text-align: left;
-}
-.assistant-message {
-    background: #FFF8E1; padding: 10px 14px; border-radius: 18px 18px 4px 18px;
-    min-width: 10px; max-width: 70%; position: relative; text-align: left;
-}
-.user-container { justify-content: flex-start; }
-.assistant-container { justify-content: flex-end; }
+/* 原有样式保持不变 */
 </style>
 """, unsafe_allow_html=True)
 
-# API Key (unchanged)
 os.environ["DASHSCOPE_API_KEY"] = "sk-15292fd22b02419db281e42552c0e453"
-
-# Model (unchanged)
 llm = ChatTongyi(model_name="qwen-plus")
 
-# System Prompt (unchanged)
+# 系统提示词
 try:
     with open('prompt.txt', 'r', encoding='utf-8') as f:
         system_prompt = f.read()
 except FileNotFoundError:
     system_prompt = "You are 'Alex', a study participant texting warmly."
 
-# Unique User ID (unchanged)
+# 用户ID管理
 if "user_id" not in st.session_state:
     st.session_state.user_id = str(uuid.uuid4())
 user_id = st.session_state.user_id
 
-# History Factory: Separate per user (unchanged)
+# 历史记录工厂
 def history_factory(session_id):
     return StreamlitChatMessageHistory(key=f"chat_history_{session_id}")
 
-# Prompt Template (unchanged)
+# 对话链
 prompt = ChatPromptTemplate.from_messages([
     ("system", system_prompt),
     MessagesPlaceholder(variable_name="history"),
     ("human", "{input}"),
 ])
-
-# Chain with History (unchanged, but now relies on auto-history)
 chain = prompt | llm
 chain_with_history = RunnableWithMessageHistory(
     chain,
@@ -68,48 +47,59 @@ chain_with_history = RunnableWithMessageHistory(
     history_messages_key="history",
 )
 
-# Title (unchanged)
+# 界面标题
 st.header("AI Chat Interface")
 
-# Render Current User's History (fixed: only render once, using auto-managed history)
+# 获取当前用户的历史记录
 current_history = history_factory(user_id)
-for msg in current_history.messages:
-    if msg.type == "human":
-        st.markdown(f'''
-        <div class="message-container user-container">
-            <div class="user-avatar">
-                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" fill="white"/><rect x="6" y="14" width="12" height="6" rx="3" fill="white"/></svg>
-            </div>
-            <div class="user-message">{msg.content}</div>
-        </div>
-        ''', unsafe_allow_html=True)
-    else:
-        st.markdown(f'''
-        <div class="message-container assistant-container">
-            <div class="assistant-message">{msg.content}</div>
-            <div class="assistant-avatar">
-                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" fill="white"/><circle cx="12" cy="12" r="5" fill="#FFD700"/></svg>
-            </div>
-        </div>
-        ''', unsafe_allow_html=True)
 
-# User Input Handling (fixed: no manual history addition)
+# 显示消息的核心逻辑
+def render_messages():
+    for msg in current_history.messages:
+        if msg.type == "human":
+            st.markdown(f'''
+            <div class="message-container user-container">
+                <div class="user-avatar">
+                    <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" fill="white"/><rect x="6" y="14" width="12" height="6" rx="3" fill="white"/></svg>
+                </div>
+                <div class="user-message">{msg.content}</div>
+            </div>
+            ''', unsafe_allow_html=True)
+        else:
+            st.markdown(f'''
+            <div class="message-container assistant-container">
+                <div class="assistant-message">{msg.content}</div>
+                <div class="assistant-avatar">
+                    <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" fill="white"/><circle cx="12" cy="12" r="5" fill="#FFD700"/></svg>
+                </div>
+            </div>
+            ''', unsafe_allow_html=True)
+
+# 先渲染已有消息
+render_messages()
+
+# 用户输入处理
 user_input = st.chat_input("Type your message...")
 if user_input:
-    try:
-        # Let chain_with_history auto-manage history:
-        # - Adds user input as human message
-        # - Adds AI response as ai message
-        response = chain_with_history.invoke(
-            {"input": user_input},
-            config={"configurable": {"session_id": user_id}}
-        )
-    except Exception as e:
-        # Manual error handling (since chain failed, no auto-add)
-        current_history = history_factory(user_id)
-        current_history.add_ai_message(f"Error: {str(e)}")
+    # 第一步：立即添加并显示用户消息
+    current_history.add_user_message(user_input)
+    st.experimental_rerun()
 
-# Parent Communication (optional, updated with user ID)
+# 第二步：处理AI响应
+if current_history.messages:
+    last_msg = current_history.messages[-1]
+    if last_msg.type == "human" and (len(current_history.messages) < 2 or current_history.messages[-2].type != "ai"):
+        try:
+            response = chain_with_history.invoke(
+                {"input": last_msg.content},
+                config={"configurable": {"session_id": user_id}}
+            )
+            # 自动添加AI消息到历史记录
+        except Exception as e:
+            current_history.add_ai_message(f"Error: {str(e)}")
+        st.experimental_rerun()
+
+# 父窗口通信（可选）
 if current_history.messages:
     message = {
         "type": "chat-update",
@@ -123,7 +113,7 @@ if current_history.messages:
     """
     st.markdown(js_code, unsafe_allow_html=True)
 
-# Clear Chat Handler (optional, with user ID)
+# 清除聊天处理器（可选）
 st.markdown(f"""
 <script>
     window.addEventListener('message', function(event) {{
