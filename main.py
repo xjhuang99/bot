@@ -74,7 +74,47 @@ st.header("AI Chat Interface")
 # 获取当前用户的历史记录
 current_history = history_factory(user_id)
 
-# 渲染当前用户的历史记录 (修复：使用Streamlit的聊天消息组件)
+# 显示"正在输入"状态的函数
+def show_typing_indicator():
+    st.markdown(f'''
+    <div class="message-container assistant-container">
+        <div class="assistant-message" style="min-height: 24px;">
+            <div class="typing-indicator">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+        <div class="assistant-avatar">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" fill="white"/><circle cx="12" cy="12" r="5" fill="#FFD700"/></svg>
+        </div>
+    </div>
+    <style>
+    .typing-indicator {{
+        display: flex;
+        gap: 3px;
+    }}
+    .typing-indicator span {{
+        width: 5px;
+        height: 5px;
+        background-color: #666;
+        border-radius: 50%;
+        animation: typing 1.4s infinite ease-in-out;
+    }}
+    .typing-indicator span:nth-child(2) {{
+        animation-delay: 0.2s;
+    }}
+    .typing-indicator span:nth-child(3) {{
+        animation-delay: 0.4s;
+    }}
+    @keyframes typing {{
+        0%, 60%, 100% {{ transform: translateY(0); }}
+        30% {{ transform: translateY(-5px); }}
+    }}
+    </style>
+    ''', unsafe_allow_html=True)
+
+# 渲染当前用户的历史记录 (修复：先显示历史，再处理新消息)
 for msg in current_history.messages:
     if msg.type == "human":
         st.markdown(f'''
@@ -85,7 +125,7 @@ for msg in current_history.messages:
             <div class="user-message">{msg.content}</div>
         </div>
         ''', unsafe_allow_html=True)
-    else:
+    elif msg.type == "ai":
         st.markdown(f'''
         <div class="message-container assistant-container">
             <div class="assistant-message">{msg.content}</div>
@@ -95,19 +135,36 @@ for msg in current_history.messages:
         </div>
         ''', unsafe_allow_html=True)
 
-# 用户输入处理 (修复：改进错误处理和消息显示)
+# 用户输入处理 (修复：立即显示用户消息，并添加"正在输入"状态)
 user_input = st.chat_input("Type your message...")
 if user_input:
+    # 立即显示用户消息
+    st.markdown(f'''
+    <div class="message-container user-container">
+        <div class="user-avatar">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" fill="white"/><rect x="6" y="14" width="12" height="6" rx="3" fill="white"/></svg>
+        </div>
+        <div class="user-message">{user_input}</div>
+    </div>
+    ''', unsafe_allow_html=True)
+    
+    # 添加用户消息到历史记录
+    current_history.add_user_message(user_input)
+    
+    # 显示"正在输入"状态
+    typing_indicator = show_typing_indicator()
+    
     try:
         # 让chain_with_history自动管理历史记录
-        # - 添加用户输入作为人类消息
-        # - 添加AI响应作为AI消息
         response = chain_with_history.invoke(
             {"input": user_input},
             config={"configurable": {"session_id": user_id}}
         )
         
-        # 显示最新的AI响应
+        # 移除"正在输入"状态
+        st.empty()
+        
+        # 显示AI响应
         st.markdown(f'''
         <div class="message-container assistant-container">
             <div class="assistant-message">{response.content}</div>
@@ -118,7 +175,10 @@ if user_input:
         ''', unsafe_allow_html=True)
         
     except Exception as e:
-        # 错误处理 (改进：显示错误消息并添加到历史记录)
+        # 移除"正在输入"状态
+        st.empty()
+        
+        # 错误处理
         error_msg = f"Error: {str(e)}"
         st.markdown(f'''
         <div class="message-container assistant-container">
@@ -127,12 +187,8 @@ if user_input:
         </div>
         ''', unsafe_allow_html=True)
         
-        # 手动添加错误消息到历史记录
-        current_history = history_factory(user_id)
+        # 添加错误消息到历史记录
         current_history.add_ai_message(error_msg)
-        
-        # 刷新页面以反映历史记录的变化
-        st.experimental_rerun()
 
 # 父窗口通信 (可选，更新了用户ID)
 if current_history.messages:
