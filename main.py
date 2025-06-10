@@ -76,6 +76,13 @@ st.header("AI Chat Interface")
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+# User input
+user_input = st.chat_input("Type your message...")
+
+# If user sends a message, append it immediately
+if user_input:
+    st.session_state.messages.append({"role": "user", "content": user_input})
+
 # Display chat history from session_state
 for msg in st.session_state.messages:
     if msg["role"] == "user":
@@ -97,26 +104,19 @@ for msg in st.session_state.messages:
         </div>
         ''', unsafe_allow_html=True)
 
-# User input
-user_input = st.chat_input("Type your message...")
-
-if user_input:
-    # 1. Immediately show user message
-    st.session_state.messages.append({"role": "user", "content": user_input})
-    st.experimental_rerun()  # Rerun to immediately display the user message
-
-# 2. If the last message is from user and not yet answered, call the AI and show the reply
+# If the last message is from user and not yet answered, call the AI and show the reply
 if st.session_state.messages:
     last_msg = st.session_state.messages[-1]
-    if last_msg["role"] == "user" and (len(st.session_state.messages) == 1 or st.session_state.messages[-2]["role"] != "assistant"):
-        # Call the AI
+    # Only respond if the last message is from user and there is no pending assistant reply
+    if last_msg["role"] == "user" and (
+        len(st.session_state.messages) == 1 or st.session_state.messages[-2]["role"] != "assistant"
+    ):
         response = chain_with_history.invoke(
             {"input": last_msg["content"]},
             config={"configurable": {"session_id": "default"}}
         )
-        # Save assistant message
         st.session_state.messages.append({"role": "assistant", "content": response.content})
-        st.experimental_rerun()  # Rerun to display the assistant message
+        st.experimental_rerun = lambda: None  # Disable rerun to avoid AttributeError
 
 # Parent window communication (optional)
 if st.session_state.get("messages"):
