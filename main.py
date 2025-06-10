@@ -74,42 +74,42 @@ st.header("AI Chat Interface")
 # 获取当前用户的历史记录
 current_history = history_factory(user_id)
 
-# 渲染当前用户的历史记录
-for msg in current_history.messages:
-    if msg.type == "human":
-        st.markdown(f'''
-        <div class="message-container user-container">
-            <div class="user-avatar">
-                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" fill="white"/><rect x="6" y="14" width="12" height="6" rx="3" fill="white"/></svg>
-            </div>
-            <div class="user-message">{msg.content}</div>
-        </div>
-        ''', unsafe_allow_html=True)
-    elif msg.type == "ai":
-        st.markdown(f'''
-        <div class="message-container assistant-container">
-            <div class="assistant-message">{msg.content}</div>
-            <div class="assistant-avatar">
-                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" fill="white"/><circle cx="12" cy="12" r="5" fill="#FFD700"/></svg>
-            </div>
-        </div>
-        ''', unsafe_allow_html=True)
+# 用于追踪已显示的消息ID
+if "displayed_message_ids" not in st.session_state:
+    st.session_state.displayed_message_ids = set()
 
-# 用户输入处理 (修复：立即显示用户消息)
+# 渲染当前用户的历史记录，避免重复显示
+for msg in current_history.messages:
+    msg_id = f"{msg.type}_{hash(msg.content)}"
+    if msg_id not in st.session_state.displayed_message_ids:
+        if msg.type == "human":
+            st.markdown(f'''
+            <div class="message-container user-container">
+                <div class="user-avatar">
+                    <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" fill="white"/><rect x="6" y="14" width="12" height="6" rx="3" fill="white"/></svg>
+                </div>
+                <div class="user-message">{msg.content}</div>
+            </div>
+            ''', unsafe_allow_html=True)
+        elif msg.type == "ai":
+            st.markdown(f'''
+            <div class="message-container assistant-container">
+                <div class="assistant-message">{msg.content}</div>
+                <div class="assistant-avatar">
+                    <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" fill="white"/><circle cx="12" cy="12" r="5" fill="#FFD700"/></svg>
+                </div>
+            </div>
+            ''', unsafe_allow_html=True)
+        st.session_state.displayed_message_ids.add(msg_id)
+
+# 用户输入处理
 user_input = st.chat_input("Type your message...")
 if user_input:
-    # 立即显示用户消息
-    st.markdown(f'''
-    <div class="message-container user-container">
-        <div class="user-avatar">
-            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" fill="white"/><rect x="6" y="14" width="12" height="6" rx="3" fill="white"/></svg>
-        </div>
-        <div class="user-message">{user_input}</div>
-    </div>
-    ''', unsafe_allow_html=True)
-    
     # 添加用户消息到历史记录
     current_history.add_user_message(user_input)
+    
+    # 重置已显示的消息ID，准备重新渲染所有消息
+    st.session_state.displayed_message_ids = set()
     
     try:
         # 让chain_with_history自动管理历史记录
@@ -118,28 +118,19 @@ if user_input:
             config={"configurable": {"session_id": user_id}}
         )
         
-        # 显示AI响应
-        st.markdown(f'''
-        <div class="message-container assistant-container">
-            <div class="assistant-message">{response.content}</div>
-            <div class="assistant-avatar">
-                <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" fill="white"/><circle cx="12" cy="12" r="5" fill="#FFD700"/></svg>
-            </div>
-        </div>
-        ''', unsafe_allow_html=True)
+        # 添加AI响应到历史记录
+        current_history.add_ai_message(response.content)
+        
+        # 刷新页面以显示所有消息
+        st.experimental_rerun()
         
     except Exception as e:
         # 错误处理
         error_msg = f"Error: {str(e)}"
-        st.markdown(f'''
-        <div class="message-container assistant-container">
-            <div class="assistant-message" style="background-color: #ffebee; color: #b71c1c;">{error_msg}</div>
-            <div class="assistant-avatar" style="background-color: #b71c1c;">!</div>
-        </div>
-        ''', unsafe_allow_html=True)
-        
-        # 添加错误消息到历史记录
         current_history.add_ai_message(error_msg)
+        
+        # 刷新页面以显示错误消息
+        st.experimental_rerun()
 
 # 父窗口通信 (可选，更新了用户ID)
 if current_history.messages:
