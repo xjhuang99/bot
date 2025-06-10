@@ -88,4 +88,39 @@ if user_input:
 # 第二步：处理AI响应
 if current_history.messages:
     last_msg = current_history.messages[-1]
-    if last_msg.type == "human" and (len(current_history.messages) <
+    if last_msg.type == "human" and (len(current_history.messages) < 2 or current_history.messages[-2].type != "ai"):
+        try:
+            # 调用AI并自动添加回复到历史记录
+            response = chain_with_history.invoke(
+                {"input": last_msg.content},
+                config={"configurable": {"session_id": user_id}}
+            )
+        except Exception as e:
+            current_history.add_ai_message(f"Error: {str(e)}")
+        st.experimental_rerun()  # 再次刷新以显示AI回复
+
+# 父窗口通信（可选）
+if current_history.messages:
+    message = {
+        "type": "chat-update",
+        "user_id": user_id,
+        "messages": [{"role": m.type, "content": m.content} for m in current_history.messages]
+    }
+    js_code = f"""
+    <script>
+        window.parent.postMessage({json.dumps(message)}, "*");
+    </script>
+    """
+    st.markdown(js_code, unsafe_allow_html=True)
+
+# 清除聊天处理器（可选）
+st.markdown(f"""
+<script>
+    window.addEventListener('message', function(event) {{
+        if (event.data.type === 'clear-chat' && event.data.user_id === '{user_id}') {{
+            window.parent.postMessage({{type: 'chat-cleared', user_id: '{user_id}'}}, '*');
+            window.location.reload();
+        }}
+    }});
+</script>
+""", unsafe_allow_html=True)
