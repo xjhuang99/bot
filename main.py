@@ -10,7 +10,7 @@ import streamlit as st
 # Configure page settings with robot page icon
 st.set_page_config(
     page_title="Qwen Chat",
-    page_icon="🤖",  # Robot icon for the page
+    page_icon="🤖",
     layout="centered",
     initial_sidebar_state="collapsed"
 )
@@ -42,7 +42,7 @@ hide_streamlit_style = """
     }
     
     .user-avatar {
-        background-color: #4285F4; /* Blue for user */
+        background-color: #4285F4;
         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 12h-4l-3 9L9 3l-3 9H2'%3E%3C/path%3E%3C/svg%3E");
         background-size: 20px;
         background-position: center;
@@ -50,7 +50,7 @@ hide_streamlit_style = """
     }
     
     .assistant-avatar {
-        background-color: #FFD700; /* Yellow for AI */
+        background-color: #FFD700;
         background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cline x1='12' y1='8' x2='12' y2='12'%3E%3C/line%3E%3Cline x1='12' y1='16' x2='12.01' y2='16'%3E%3C/line%3E%3C/svg%3E");
         background-size: 20px;
         background-position: center;
@@ -59,7 +59,7 @@ hide_streamlit_style = """
     
     .user-message {
         text-align: left;
-        background-color: #E3F2FD; /* Light blue for user */
+        background-color: #E3F2FD;
         padding: 10px 14px;
         border-radius: 20px 20px 20px 0;
         min-width: 10px;
@@ -69,7 +69,7 @@ hide_streamlit_style = """
     
     .assistant-message {
         text-align: right;
-        background-color: #FFF8E1; /* Light yellow for AI */
+        background-color: #FFF8E1;
         padding: 10px 14px;
         border-radius: 20px 20px 0 20px;
         min-width: 10px;
@@ -77,7 +77,6 @@ hide_streamlit_style = """
         position: relative;
     }
     
-    /* Arrow indicators for message direction */
     .user-message::after {
         content: "";
         position: absolute;
@@ -104,12 +103,10 @@ hide_streamlit_style = """
         margin-bottom: -12px;
     }
     
-    /* Container for left-aligned user messages */
     .user-container {
         justify-content: flex-start;
     }
     
-    /* Container for right-aligned assistant messages */
     .assistant-container {
         justify-content: flex-end;
     }
@@ -123,23 +120,25 @@ os.environ["DASHSCOPE_API_KEY"] = "sk-15292fd22b02419db281e42552c0e453"
 # Initialize model
 llm = ChatTongyi(model_name="qwen-plus")
 
-# Load prompt
+# Load prompt with history support
 try:
     with open('prompt.txt', 'r', encoding='utf-8') as f:
         system_prompt = f.read()
 except FileNotFoundError:
     system_prompt = """
-    You are "Alex", a study participant texting warmly. 
+    You are "Alex", a study participant texting warmly. Use casual style:
+    - lowercase, abbreviations (e.g., w/ for with), minimal punctuation
+    - always validate the other person's feelings based on previous context
     """
 
-# Define prompt template
+# Define prompt template with history placeholder
 prompt = ChatPromptTemplate.from_messages([
     ("system", system_prompt),
     MessagesPlaceholder(variable_name="history"),
     ("human", "{input}"),
 ])
 
-# Build conversation chain
+# Build conversation chain with history
 chain = prompt | llm
 chain_with_history = RunnableWithMessageHistory(
     chain,
@@ -151,7 +150,7 @@ chain_with_history = RunnableWithMessageHistory(
 # Interface title
 st.header("AI Chat Interface")
 
-# Initialize message history
+# Initialize message history in session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -172,9 +171,9 @@ for msg in st.session_state.messages:
         </div>
         ''', unsafe_allow_html=True)
 
-# Handle user input
+# Handle user input with context preservation
 if user_input := st.chat_input("Type your message..."):
-    # Save user message
+    # Save user message to history
     st.session_state.messages.append({"role": "user", "content": user_input})
     st.markdown(f'''
     <div class="message-container user-container">
@@ -183,14 +182,14 @@ if user_input := st.chat_input("Type your message..."):
     </div>
     ''', unsafe_allow_html=True)
 
-    # Generate AI response
+    # Generate AI response with full conversation history
     with st.spinner("Typing..."):
         response = chain_with_history.invoke(
             {"input": user_input},
             config={"configurable": {"session_id": "default"}}
         )
     
-    # Save AI response
+    # Save AI response to history
     st.session_state.messages.append({"role": "assistant", "content": response.content})
     st.markdown(f'''
     <div class="message-container assistant-container">
@@ -199,7 +198,7 @@ if user_input := st.chat_input("Type your message..."):
     </div>
     ''', unsafe_allow_html=True)
 
-    # Send update to parent iframe
+    # Send update to parent iframe with full history
     message = {
         "type": "chat-update",
         "messages": st.session_state.messages
@@ -211,11 +210,12 @@ if user_input := st.chat_input("Type your message..."):
     """
     st.markdown(js_code, unsafe_allow_html=True)
 
-# Listen for parent messages
+# Listen for parent messages (e.g., clear chat)
 st.markdown("""
 <script>
     window.addEventListener('message', function(event) {
         if (event.data.type === 'clear-chat') {
+            st.session_state.messages = [];
             window.parent.postMessage({type: 'chat-cleared'}, '*');
         }
     });
