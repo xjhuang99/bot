@@ -74,47 +74,7 @@ st.header("AI Chat Interface")
 # 获取当前用户的历史记录
 current_history = history_factory(user_id)
 
-# 显示"正在输入"状态的函数
-def show_typing_indicator():
-    st.markdown(f'''
-    <div class="message-container assistant-container">
-        <div class="assistant-message" style="min-height: 24px;">
-            <div class="typing-indicator">
-                <span></span>
-                <span></span>
-                <span></span>
-            </div>
-        </div>
-        <div class="assistant-avatar">
-            <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" fill="white"/><circle cx="12" cy="12" r="5" fill="#FFD700"/></svg>
-        </div>
-    </div>
-    <style>
-    .typing-indicator {{
-        display: flex;
-        gap: 3px;
-    }}
-    .typing-indicator span {{
-        width: 5px;
-        height: 5px;
-        background-color: #666;
-        border-radius: 50%;
-        animation: typing 1.4s infinite ease-in-out;
-    }}
-    .typing-indicator span:nth-child(2) {{
-        animation-delay: 0.2s;
-    }}
-    .typing-indicator span:nth-child(3) {{
-        animation-delay: 0.4s;
-    }}
-    @keyframes typing {{
-        0%, 60%, 100% {{ transform: translateY(0); }}
-        30% {{ transform: translateY(-5px); }}
-    }}
-    </style>
-    ''', unsafe_allow_html=True)
-
-# 渲染当前用户的历史记录 (修复：先显示历史，再处理新消息)
+# 渲染当前用户的历史记录
 for msg in current_history.messages:
     if msg.type == "human":
         st.markdown(f'''
@@ -135,7 +95,7 @@ for msg in current_history.messages:
         </div>
         ''', unsafe_allow_html=True)
 
-# 用户输入处理 (修复：立即显示用户消息，并添加"正在输入"状态)
+# 用户输入处理 (修复：立即显示用户消息)
 user_input = st.chat_input("Type your message...")
 if user_input:
     # 立即显示用户消息
@@ -151,18 +111,12 @@ if user_input:
     # 添加用户消息到历史记录
     current_history.add_user_message(user_input)
     
-    # 显示"正在输入"状态
-    typing_indicator = show_typing_indicator()
-    
     try:
         # 让chain_with_history自动管理历史记录
         response = chain_with_history.invoke(
             {"input": user_input},
             config={"configurable": {"session_id": user_id}}
         )
-        
-        # 移除"正在输入"状态
-        st.empty()
         
         # 显示AI响应
         st.markdown(f'''
@@ -175,9 +129,6 @@ if user_input:
         ''', unsafe_allow_html=True)
         
     except Exception as e:
-        # 移除"正在输入"状态
-        st.empty()
-        
         # 错误处理
         error_msg = f"Error: {str(e)}"
         st.markdown(f'''
