@@ -10,23 +10,7 @@ import streamlit as st
 # 样式保持不变
 st.markdown("""
 <style>
-.message-container { display: flex; align-items: flex-start; margin-bottom: 18px; }
-.user-avatar, .assistant-avatar {
-    width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    margin: 0 10px; font-size: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-}
-.user-avatar { background: #4285F4; }
-.assistant-avatar { background: #FFD700; }
-.user-message {
-    background: #E3F2FD; padding: 10px 14px; border-radius: 18px 18px 18px 4px;
-    min-width: 10px; max-width: 70%; position: relative; text-align: left;
-}
-.assistant-message {
-    background: #FFF8E1; padding: 10px 14px; border-radius: 18px 18px 4px 18px;
-    min-width: 10px; max-width: 70%; position: relative; text-align: left;
-}
-.user-container { justify-content: flex-start; }
-.assistant-container { justify-content: flex-end; }
+/* 原有样式代码 */
 </style>
 """, unsafe_allow_html=True)
 
@@ -97,41 +81,11 @@ render_messages()
 # 用户输入处理
 user_input = st.chat_input("Type your message...")
 if user_input:
-    try:
-        # 让chain_with_history自动管理消息添加
-        response = chain_with_history.invoke(
-            {"input": user_input},
-            config={"configurable": {"session_id": user_id}}
-        )
-    except Exception as e:
-        # 错误处理
-        current_history.add_ai_message(f"Error: {str(e)}")
-    
-    # 强制刷新页面以显示最新消息
-    st.experimental_rerun()
+    # 第一步：立即添加用户消息并刷新
+    current_history.add_user_message(user_input)
+    st.experimental_rerun()  # 强制刷新以显示用户消息
 
-# 父窗口通信（可选）
+# 第二步：处理AI响应
 if current_history.messages:
-    message = {
-        "type": "chat-update",
-        "user_id": user_id,
-        "messages": [{"role": m.type, "content": m.content} for m in current_history.messages]
-    }
-    js_code = f"""
-    <script>
-        window.parent.postMessage({json.dumps(message)}, "*");
-    </script>
-    """
-    st.markdown(js_code, unsafe_allow_html=True)
-
-# 清除聊天处理器（可选）
-st.markdown(f"""
-<script>
-    window.addEventListener('message', function(event) {{
-        if (event.data.type === 'clear-chat' && event.data.user_id === '{user_id}') {{
-            window.parent.postMessage({{type: 'chat-cleared', user_id: '{user_id}'}}, '*');
-            window.location.reload();
-        }}
-    }});
-</script>
-""", unsafe_allow_html=True)
+    last_msg = current_history.messages[-1]
+    if last_msg.type == "human" and (len(current_history.messages) <
