@@ -7,7 +7,7 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import StreamlitChatMessageHistory
 import streamlit as st
 
-# Style updates (unchanged)
+# Style (unchanged)
 st.markdown("""
 <style>
 .message-container { display: flex; align-items: flex-start; margin-bottom: 18px; }
@@ -33,45 +33,45 @@ st.markdown("""
 # API Key (unchanged)
 os.environ["DASHSCOPE_API_KEY"] = "sk-15292fd22b02419db281e42552c0e453"
 
-# Model initialization (unchanged)
+# Model (unchanged)
 llm = ChatTongyi(model_name="qwen-plus")
 
-# System prompt (unchanged)
+# System Prompt (unchanged)
 try:
     with open('prompt.txt', 'r', encoding='utf-8') as f:
         system_prompt = f.read()
 except FileNotFoundError:
     system_prompt = "You are 'Alex', a study participant texting warmly."
 
-# Unique user ID for session separation
+# Unique User ID (unchanged)
 if "user_id" not in st.session_state:
-    st.session_state.user_id = str(uuid.uuid4())  # Unique ID per participant
+    st.session_state.user_id = str(uuid.uuid4())
 user_id = st.session_state.user_id
 
-# History factory: Separate storage per user ID
+# History Factory: Separate per user (unchanged)
 def history_factory(session_id):
     return StreamlitChatMessageHistory(key=f"chat_history_{session_id}")
 
-# Prompt template (updated to use dynamic history)
+# Prompt Template (unchanged)
 prompt = ChatPromptTemplate.from_messages([
     ("system", system_prompt),
     MessagesPlaceholder(variable_name="history"),
     ("human", "{input}"),
 ])
 
-# Chain with per-user history
+# Chain with History (unchanged, but now relies on auto-history)
 chain = prompt | llm
 chain_with_history = RunnableWithMessageHistory(
     chain,
-    history_factory,  # Creates separate history for each session ID
+    history_factory,
     input_messages_key="input",
     history_messages_key="history",
 )
 
-# App title (unchanged)
+# Title (unchanged)
 st.header("AI Chat Interface")
 
-# Render current user's conversation history
+# Render Current User's History (fixed: only render once, using auto-managed history)
 current_history = history_factory(user_id)
 for msg in current_history.messages:
     if msg.type == "human":
@@ -93,23 +93,23 @@ for msg in current_history.messages:
         </div>
         ''', unsafe_allow_html=True)
 
-# User input handling (with unique session ID)
+# User Input Handling (fixed: no manual history addition)
 user_input = st.chat_input("Type your message...")
 if user_input:
-    # Add user message to their unique history
-    current_history.add_user_message(user_input)
-    
-    # Generate response using the user's unique session ID
     try:
+        # Let chain_with_history auto-manage history:
+        # - Adds user input as human message
+        # - Adds AI response as ai message
         response = chain_with_history.invoke(
             {"input": user_input},
             config={"configurable": {"session_id": user_id}}
         )
-        current_history.add_ai_message(response.content)
     except Exception as e:
+        # Manual error handling (since chain failed, no auto-add)
+        current_history = history_factory(user_id)
         current_history.add_ai_message(f"Error: {str(e)}")
 
-# Parent window communication (optional - pass user ID in message)
+# Parent Communication (optional, updated with user ID)
 if current_history.messages:
     message = {
         "type": "chat-update",
@@ -123,7 +123,7 @@ if current_history.messages:
     """
     st.markdown(js_code, unsafe_allow_html=True)
 
-# Clear chat handler (optional - include user ID)
+# Clear Chat Handler (optional, with user ID)
 st.markdown(f"""
 <script>
     window.addEventListener('message', function(event) {{
