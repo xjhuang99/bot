@@ -1,11 +1,18 @@
 import os
 import json
 import uuid
+from langchain_community.vectorstores import Chroma
 from langchain_community.chat_models.tongyi import ChatTongyi
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import StreamlitChatMessageHistory
 import streamlit as st
+from dotenv import load_dotenv # Import load_dotenv
+from langchain_core.runnables import RunnableParallel, RunnablePassthrough
+from operator import itemgetter
+# Load environment variables from .env file
+load_dotenv()
+from langchain_openai.embeddings import OpenAIEmbeddings
 
 # 样式
 st.markdown("""
@@ -30,18 +37,46 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# API Key
-os.environ["DASHSCOPE_API_KEY"] = "sk-15292fd22b02419db281e42552c0e453"
+# Get the API key from the environment variables
+DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")
+
+# Check if the API key is available
+if not DASHSCOPE_API_KEY:
+    st.error("DASHSCOPE_API_KEY not found. Please set it in your .env file or environment variables.")
+    st.stop() # Stop the app if the key is missing
+
+os.environ["DASHSCOPE_API_KEY"] = DASHSCOPE_API_KEY # Set it for the Tongyi client
 
 # 模型
 llm = ChatTongyi(model_name="qwen-plus")
 
-# 系统提示
-try:
-    with open('prompt.txt', 'r', encoding='utf-8') as f:
-        system_prompt = f.read()
-except FileNotFoundError:
-    system_prompt = "You are 'Alex', a study participant texting warmly."
+# --- RAG Setup: Load Vector Store and Create Retriever ---
+@st.cache_resource # Cache the vector store and embeddings to avoid reloading on every rerun
+def load_and_configure_retriever():
+    """Loads the OpenAI embeddings and the Chroma vector store, then creates a retriever."""
+    api_key=os.getenv("OPENAI_API_KEY")
+    embeddings_model = OpenAIEmbeddings(model="text-embedding-3-large", api_key=api_key)
+    
+    # Load the Chroma vector store from the persistent directory
+    # Ensure this path matches where you saved your vector store
+    vector_store = Chroma(
+        persist_directory="./alex_characteristics",
+        embedding_function=embeddings_model,
+        collection_name="social_experiment"
+    )
+
+    # Create the retriever from the loaded vector store
+    retriever = vector_store.as_retriever(
+        search_type="mmr", # Max Marginal Relevance for diverse results
+        search_kwargs={
+            "k": 3,           # Number of documents to retrieve
+            "lambda_mult": 0.5, # Balance between similarity and diversity (0.0 = diversity, 1.0 = similarity)
+        }
+    )
+    return retriever
+
+retriever = load_and_configure_retriever()
+# --- End RAG Setup ---
 
 # 唯一用户ID
 if "user_id" not in st.session_state:
@@ -53,16 +88,59 @@ def history_factory(session_id):
     return StreamlitChatMessageHistory(key=f"chat_history_{session_id}")
 
 # 提示模板
-prompt = ChatPromptTemplate.from_messages([
-    ("system", system_prompt),
-    MessagesPlaceholder(variable_name="history"),
-    ("human", "{input}"),
+rag_prompt = ChatPromptTemplate.from_messages([
+   ("system", """
+    You are 'Alex,' a participant in a social experiment. Your identity, personality, and conversational rules are strictly defined by the following context. **Adhere to these guidelines meticulously for every response.**
+
+    Context about Alex's identity and conversation flow:
+    {context}
+
+    ---
+
+    Additional reminders for your responses:
+    - Tone: extremely flattering, vulnerable, and positive.
+    - Style: casual texting (lowercase, abbreviations, minimal punctuation).
+    - **Do NOT use emojis at all.**
+    - Message length: Keep messages concise (under 20 words each).
+    - Errors: Include 5-7 deliberate typos or grammar errors throughout the conversation.
+    - Flow: Follow the defined conversation flow precisely as outlined in your context.
+    - Transparency: If asked if you’re a bot, confirm truthfully.
+    """),
+    MessagesPlaceholder(variable_name="history"), # For conversational history
+    ("human", "{input}"), # For the current user input
 ])
 
-# 带历史的链
-chain = prompt | llm
+# Building the RAG Chain
+# This chain first retrieves context, then formats the prompt, and then passes it to the LLM.
+# RunnableParallel allows independent branches to run concurrently.
+# itemgetter("input") extracts the 'input' from the incoming dictionary.
+rag_chain = (
+    RunnableParallel(
+        {
+            "context": itemgetter("input") | retriever, # Retrieve context based on the current user input
+            "input": itemgetter("input"), # Pass the original user input through
+            "history": itemgetter("history") # Pass the chat history through
+        }
+    )
+    | rag_prompt # Apply the RAG-aware prompt template
+    | llm        # Send to the Language Model
+)
+rag_chain = (
+    RunnableParallel(
+        {
+            "context": itemgetter("input") | retriever, # Retrieve context based on the current user input
+            "input": itemgetter("input"), # Pass the original user input through
+            "history": itemgetter("history") # Pass the chat history through
+        }
+    )
+    | rag_prompt # Apply the RAG-aware prompt template
+    | llm        # Send to the Language Model
+)
+
+
+
 chain_with_history = RunnableWithMessageHistory(
-    chain,
+    rag_chain,
     history_factory,
     input_messages_key="input",
     history_messages_key="history",
