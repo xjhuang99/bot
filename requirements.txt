@@ -1,3 +1,4 @@
-streamlit>=1.28.0
-langchain-community>=0.0.1
-dashscope>=1.0.0
+langchain-community==0.0.401
+langchain-openai==0.0.91
+streamlit==1.29.0
+python-dotenv==1.0.0
