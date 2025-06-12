@@ -2,3 +2,15 @@ langchain-community==0.0.401
 langchain-openai==0.0.91
 streamlit==1.29.0
 python-dotenv==1.0.0
+pymongo==4.13.1
+langchain==0.3.21
+langchain-chroma==0.2.2
+langchain-text-splitters==0.3.7
+langchain-core==0.3.49
+python-dotenv=1.0.1
+
+
+
+
+
+
