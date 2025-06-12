@@ -5,8 +5,8 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_openai.embeddings import OpenAIEmbeddings
 import os
 from dotenv import load_dotenv
-from langchain_community.vectorstores import Chroma
-
+from langchain_chroma import Chroma
+from main import get_secret
 load_dotenv()
 #Load the document
 doc2txt=Docx2txtLoader(file_path='files/alex_characteristics.docx')
@@ -31,7 +31,7 @@ page_split = recursive_splitter.split_documents(splitted_pages)
 page_split
 
 #Embeddings
-api_key=os.getenv("OPENAI_API_KEY")
+api_key=get_secret("OPENAI_API_KEY")
 embeddings=OpenAIEmbeddings(model="text-embedding-3-large", api_key=api_key)
 
 
